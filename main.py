@@ -1,12 +1,13 @@
 import os
 import json
 import sqlite3
-from contextlib import closing
+from contextlib import asynccontextmanager, closing
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
-from typing import Any
+from typing import Any, Literal
 from pydantic import BaseModel, Field
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,9 +20,43 @@ from urllib.parse import urlencode
 
 load_dotenv()
 
+REMINDER_JOB_ID = "daily-dingtalk-reminder"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    reminder_hour = int(os.getenv("REMINDER_HOUR", "9"))
+    reminder_minute = int(os.getenv("REMINDER_MINUTE", "0"))
+
+    scheduler = AsyncIOScheduler(
+        timezone="Asia/Shanghai"
+    )
+
+    scheduler.add_job(
+        run_daily_dingtalk_reminders,
+        trigger="cron",
+        hour=reminder_hour,
+        minute=reminder_minute,
+        id=REMINDER_JOB_ID,
+        replace_existing=True,
+        coalesce=True,
+        max_instances=1,
+        misfire_grace_time=3600
+    )
+
+    scheduler.start()
+    app.state.reminder_scheduler = scheduler
+
+    try:
+        yield
+    finally:
+        scheduler.shutdown(wait=False)
+
+
 app = FastAPI(
     title="发票台账助手",
-    version="0.1.0"
+    version="0.1.0",
+    lifespan=lifespan
 )
 
 STATIC_DIR = Path("static")
@@ -34,6 +69,7 @@ app.mount(
 
 DIFY_API_BASE_URL = os.getenv("DIFY_API_BASE_URL", "").rstrip("/")
 DIFY_API_KEY = os.getenv("DIFY_API_KEY", "")
+DIFY_ORDER_API_KEY = os.getenv("DIFY_ORDER_API_KEY", "")
 DIFY_USER = os.getenv("DIFY_USER", "invoice-ledger-local")
 DATA_DIR = Path("data")
 DB_PATH = DATA_DIR / "invoice_ledger.db"
@@ -87,6 +123,46 @@ def init_database():
             )
         """)
 
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS notification_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                event_key TEXT NOT NULL,
+                reminder_status TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (invoice_id) REFERENCES invoices(id),
+                UNIQUE(invoice_id, channel, event_key)
+            )
+        """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS orders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_number TEXT NOT NULL,
+                order_type TEXT NOT NULL,
+                contract_number TEXT,
+                counterparty_name TEXT,
+                order_date TEXT,
+                delivery_date TEXT,
+                order_amount REAL NOT NULL,
+                settlement_method TEXT,
+                payment_terms TEXT,
+                prepayment_amount REAL NOT NULL DEFAULT 0,
+                paid_amount REAL NOT NULL DEFAULT 0,
+                payment_status TEXT NOT NULL,
+                due_date TEXT,
+                owner TEXT,
+                review_status TEXT NOT NULL DEFAULT '待人工确认',
+                review_notes TEXT,
+                source_filename TEXT,
+                raw_dify_output TEXT,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(order_type, order_number)
+            )
+        """)
+
         connection.commit()
 
 
@@ -116,6 +192,28 @@ class InvoiceCreate(BaseModel):
     source_filename: str | None = None
     raw_dify_output: dict[str, Any] = Field(default_factory=dict)
 
+
+class OrderCreate(BaseModel):
+    order_type: Literal["销售订单", "采购订单"]
+    order_number: str
+    contract_number: str | None = None
+    counterparty_name: str | None = None
+    order_date: str | None = None
+    delivery_date: str | None = None
+    order_amount: float = Field(gt=0)
+    settlement_method: str | None = None
+    payment_terms: str | None = None
+
+    # 累计收付款包含预付款
+    prepayment_amount: float = Field(default=0, ge=0)
+    paid_amount: float = Field(default=0, ge=0)
+
+    due_date: str | None = None
+    owner: str | None = None
+    review_status: str = "待人工确认"
+    review_notes: list[str] = Field(default_factory=list)
+    source_filename: str | None = None
+    raw_dify_output: dict[str, Any] = Field(default_factory=dict)
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(STATIC_DIR / "index.html")
@@ -125,7 +223,8 @@ def health_check():
     return {
         "status": "ok",
         "dify_base_url": DIFY_API_BASE_URL,
-        "dify_api_key_configured": bool(DIFY_API_KEY)
+        "dify_invoice_api_key_configured": bool(DIFY_API_KEY),
+        "dify_order_api_key_configured": bool(DIFY_ORDER_API_KEY)
     }
 
 
@@ -218,6 +317,126 @@ async def extract_invoice(
         "workflow_run_id": workflow_result.get("workflow_run_id"),
         "status": workflow_result.get("data", {}).get("status"),
         "outputs": workflow_result.get("data", {}).get("outputs", {})
+    }
+
+
+@app.post("/api/dify/orders/extract")
+async def extract_order(
+    order_type: str = Form(...),
+    order_file: UploadFile = File(...)
+):
+    if order_type not in {"销售订单", "采购订单"}:
+        raise HTTPException(
+            status_code=422,
+            detail="order_type 必须是销售订单或采购订单。"
+        )
+
+    if not DIFY_API_BASE_URL or not DIFY_ORDER_API_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="订单 Dify 配置缺失，请检查 .env 文件。"
+        )
+
+    content_type = (
+        order_file.content_type
+        or "application/octet-stream"
+    )
+
+    # 当前订单 Workflow 暂时只接收图片
+    if not content_type.startswith("image/"):
+        raise HTTPException(
+            status_code=400,
+            detail="当前订单智能识别只支持 PNG、JPG 等图片文件。"
+        )
+
+    file_content = await order_file.read()
+
+    if not file_content:
+        raise HTTPException(
+            status_code=400,
+            detail="上传的订单文件为空。"
+        )
+
+    headers = {
+        "Authorization": f"Bearer {DIFY_ORDER_API_KEY}"
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            # 第一步：将订单图片上传到订单 Workflow
+            upload_response = await client.post(
+                f"{DIFY_API_BASE_URL}/files/upload",
+                headers=headers,
+                data={"user": DIFY_USER},
+                files={
+                    "file": (
+                        order_file.filename,
+                        file_content,
+                        content_type
+                    )
+                }
+            )
+            upload_response.raise_for_status()
+
+            upload_file_id = upload_response.json()["id"]
+
+            # 第二步：执行订单识别 Workflow
+            workflow_payload = {
+                "inputs": {
+                    "order_type": order_type,
+                    "order_file": [
+                        {
+                            "transfer_method": "local_file",
+                            "upload_file_id": upload_file_id,
+                            "type": "image"
+                        }
+                    ]
+                },
+                "response_mode": "blocking",
+                "user": DIFY_USER
+            }
+
+            workflow_response = await client.post(
+                f"{DIFY_API_BASE_URL}/workflows/run",
+                headers={
+                    **headers,
+                    "Content-Type": "application/json"
+                },
+                json=workflow_payload
+            )
+            workflow_response.raise_for_status()
+            workflow_result = workflow_response.json()
+
+    except httpx.HTTPStatusError as error:
+        try:
+            detail = error.response.json()
+        except ValueError:
+            detail = error.response.text
+
+        raise HTTPException(
+            status_code=error.response.status_code,
+            detail=detail
+        ) from error
+
+    except httpx.RequestError as error:
+        raise HTTPException(
+            status_code=502,
+            detail=(
+                "无法连接到 Dify，请确认 SSH 隧道仍在运行："
+                f"{str(error)}"
+            )
+        ) from error
+
+    return {
+        "workflow_run_id": workflow_result.get(
+            "workflow_run_id"
+        ),
+        "status": workflow_result.get(
+            "data", {}
+        ).get("status"),
+        "outputs": workflow_result.get(
+            "data", {}
+        ).get("outputs", {})
     }
 
 @app.post("/api/invoices", status_code=201)
@@ -686,4 +905,311 @@ async def send_due_reminder_notification(days_before: int = 7):
         "sent_count": len(reminders),
         "message": "账期提醒已发送到钉钉群。",
         "dingtalk_response": dingtalk_result
+    }
+
+@app.post("/api/orders", status_code=201)
+def create_order(order: OrderCreate):
+    order_number = order.order_number.strip()
+
+    if not order_number:
+        raise HTTPException(
+            status_code=422,
+            detail="订单号不能为空。"
+        )
+
+    if order.paid_amount > order.order_amount:
+        raise HTTPException(
+            status_code=422,
+            detail="累计收付款金额不能大于订单金额。"
+        )
+
+    if order.prepayment_amount > order.paid_amount:
+        raise HTTPException(
+            status_code=422,
+            detail="预付款不能大于累计收付款金额。"
+        )
+
+    if order.paid_amount >= order.order_amount:
+        payment_status = (
+            "已收款"
+            if order.order_type == "销售订单"
+            else "已付款"
+        )
+    elif order.paid_amount > 0:
+        payment_status = (
+            "部分收款"
+            if order.order_type == "销售订单"
+            else "部分付款"
+        )
+    else:
+        payment_status = (
+            "未收款"
+            if order.order_type == "销售订单"
+            else "未付款"
+        )
+
+    try:
+        with closing(get_db_connection()) as connection:
+            cursor = connection.execute(
+                """
+                INSERT INTO orders (
+                    order_number,
+                    order_type,
+                    contract_number,
+                    counterparty_name,
+                    order_date,
+                    delivery_date,
+                    order_amount,
+                    settlement_method,
+                    payment_terms,
+                    prepayment_amount,
+                    paid_amount,
+                    payment_status,
+                    due_date,
+                    owner,
+                    review_status,
+                    review_notes,
+                    source_filename,
+                    raw_dify_output
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    order_number,
+                    order.order_type,
+                    order.contract_number,
+                    order.counterparty_name,
+                    order.order_date,
+                    order.delivery_date,
+                    order.order_amount,
+                    order.settlement_method,
+                    order.payment_terms,
+                    order.prepayment_amount,
+                    order.paid_amount,
+                    payment_status,
+                    order.due_date,
+                    order.owner,
+                    order.review_status,
+                    json.dumps(order.review_notes, ensure_ascii=False),
+                    order.source_filename,
+                    json.dumps(order.raw_dify_output, ensure_ascii=False)
+                )
+            )
+
+            order_id = cursor.lastrowid
+            connection.commit()
+
+    except sqlite3.IntegrityError as error:
+        raise HTTPException(
+            status_code=409,
+            detail="相同类型的订单号已经存在，不能重复保存。"
+        ) from error
+
+    return {
+        "id": order_id,
+        "order_number": order_number,
+        "payment_status": payment_status,
+        "message": "订单已保存到台账。"
+    }
+
+@app.get("/api/orders")
+def list_orders():
+    with closing(get_db_connection()) as connection:
+        rows = connection.execute(
+            """
+            SELECT
+                orders.*,
+                GROUP_CONCAT(
+                    DISTINCT invoices.invoice_number
+                ) AS invoice_numbers_text
+            FROM orders
+            LEFT JOIN invoice_order_links
+                ON invoice_order_links.order_number =
+                   orders.order_number
+            LEFT JOIN invoices
+                ON invoices.id =
+                   invoice_order_links.invoice_id
+               AND (
+                    (
+                        orders.order_type = '销售订单'
+                        AND invoices.document_type = '销售发票'
+                    )
+                    OR
+                    (
+                        orders.order_type = '采购订单'
+                        AND invoices.document_type = '采购发票'
+                    )
+               )
+            GROUP BY orders.id
+            ORDER BY orders.created_at DESC
+            """
+        ).fetchall()
+
+    items = []
+
+    for row in rows:
+        order = dict(row)
+
+        invoice_numbers_text = order.pop(
+            "invoice_numbers_text",
+            None
+        )
+
+        order["invoice_numbers"] = (
+            invoice_numbers_text.split(",")
+            if invoice_numbers_text
+            else []
+        )
+
+        order["invoice_status"] = (
+            "已关联发票"
+            if order["invoice_numbers"]
+            else "未开票"
+        )
+
+        order["review_notes"] = json.loads(
+            order["review_notes"] or "[]"
+        )
+        order["raw_dify_output"] = json.loads(
+            order["raw_dify_output"] or "{}"
+        )
+
+        items.append(order)
+
+    return {
+        "total": len(items),
+        "items": items
+    }
+
+def get_notification_event_key(reminder: dict) -> str | None:
+    days_to_due = reminder["days_to_due"]
+    due_date = reminder["due_date"]
+
+    if 4 <= days_to_due <= 7:
+        return f"{due_date}:D7"
+
+    if 1 <= days_to_due <= 3:
+        return f"{due_date}:D3"
+
+    if days_to_due == 0:
+        return f"{due_date}:D0"
+
+    if days_to_due < 0:
+        return (
+            f"{due_date}:OVERDUE:"
+            f"{date.today().isoformat()}"
+        )
+
+    return None
+
+
+def get_unsent_dingtalk_reminders(
+    reminders: list[dict]
+) -> list[dict]:
+    unsent = []
+
+    with closing(get_db_connection()) as connection:
+        for reminder in reminders:
+            event_key = get_notification_event_key(reminder)
+
+            if event_key is None:
+                continue
+
+            existing = connection.execute(
+                """
+                SELECT id
+                FROM notification_logs
+                WHERE invoice_id = ?
+                  AND channel = ?
+                  AND event_key = ?
+                """,
+                (
+                    reminder["invoice_id"],
+                    "dingtalk",
+                    event_key
+                )
+            ).fetchone()
+
+            if existing is None:
+                reminder_with_event = dict(reminder)
+                reminder_with_event["event_key"] = event_key
+                unsent.append(reminder_with_event)
+
+    return unsent
+
+def record_dingtalk_notifications(
+    reminders: list[dict]
+) -> None:
+    with closing(get_db_connection()) as connection:
+        for reminder in reminders:
+            connection.execute(
+                """
+                INSERT OR IGNORE INTO notification_logs (
+                    invoice_id,
+                    channel,
+                    event_key,
+                    reminder_status,
+                    due_date
+                )
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (
+                    reminder["invoice_id"],
+                    "dingtalk",
+                    reminder["event_key"],
+                    reminder["reminder_status"],
+                    reminder["due_date"]
+                )
+            )
+
+        connection.commit()
+
+
+@app.post("/api/notifications/dingtalk/run-daily")
+async def run_daily_dingtalk_reminders():
+    reminders = get_due_reminders(days_before=7)
+    unsent_reminders = get_unsent_dingtalk_reminders(reminders)
+
+    if not unsent_reminders:
+        return {
+            "status": "skipped",
+            "sent_count": 0,
+            "message": "今天没有新的账期提醒需要发送。"
+        }
+
+    content = build_due_reminder_message(unsent_reminders)
+    dingtalk_result = await send_dingtalk_text(content)
+
+    record_dingtalk_notifications(unsent_reminders)
+
+    return {
+        "status": "sent",
+        "sent_count": len(unsent_reminders),
+        "message": "今日账期提醒已发送。",
+        "dingtalk_response": dingtalk_result
+    }
+@app.get("/api/scheduler/status")
+def get_scheduler_status():
+    scheduler = getattr(
+        app.state,
+        "reminder_scheduler",
+        None
+    )
+
+    if scheduler is None:
+        return {
+            "running": False,
+            "message": "提醒调度器尚未启动。"
+        }
+
+    job = scheduler.get_job(REMINDER_JOB_ID)
+
+    return {
+        "running": scheduler.running,
+        "job_id": REMINDER_JOB_ID,
+        "next_run_time": (
+            job.next_run_time.isoformat()
+            if job and job.next_run_time
+            else None
+        )
     }

@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>订单台账</title>
+
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --border: #e5e7eb;
+      --success: #15803d;
+      --warning: #b45309;
+      --danger: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    .page {
+      max-width: 1440px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .subtitle {
+      margin: 7px 0 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .header-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button, input, select, textarea { font: inherit; }
+
+    button, .button-link {
+      display: inline-block;
+      padding: 10px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    button {
+      color: white;
+      border: 0;
+      background: var(--primary);
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .button-link {
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+      background: #eff6ff;
+    }
+
+    .filters, .table-card, .kpi-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+    }
+
+    .filters {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: end;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+
+    .filter-item, .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    label {
+      color: #374151;
+      font-size: 13px;
+    }
+
+    select, input, textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      background: white;
+    }
+
+    select:focus, input:focus, textarea:focus {
+      border-color: #93c5fd;
+      outline: 3px solid #dbeafe;
+    }
+
+    .filter-item select { min-width: 160px; }
+    .search-input { min-width: 280px; }
+
+    .kpis {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .kpi-card { padding: 18px; }
+
+    .kpi-label {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .kpi-value {
+      margin-top: 8px;
+      font-size: 26px;
+      font-weight: 700;
+    }
+
+    .kpi-hint {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .table-card { overflow: hidden; }
+
+    .table-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .table-title h2 {
+      margin: 0;
+      font-size: 17px;
+    }
+
+    .status-message {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .table-wrap { overflow-x: auto; }
+
+    table {
+      width: 100%;
+      min-width: 1180px;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th, td {
+      padding: 13px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      background: #f8fafc;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    tbody tr:hover { background: #f8fbff; }
+
+    .amount {
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .tag {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .tag-success { color: var(--success); background: #dcfce7; }
+    .tag-warning { color: var(--warning); background: #fef3c7; }
+    .tag-danger { color: var(--danger); background: #fee2e2; }
+    .tag-neutral { color: #475569; background: #e2e8f0; }
+
+    .empty {
+      padding: 42px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    dialog {
+      width: min(900px, calc(100% - 32px));
+      max-height: calc(100vh - 40px);
+      padding: 0;
+      border: 0;
+      border-radius: 14px;
+      box-shadow: 0 24px 70px rgba(15, 23, 42, 0.25);
+    }
+
+    dialog::backdrop { background: rgba(15, 23, 42, 0.5); }
+
+    .dialog-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .dialog-header h2 {
+      margin: 0;
+      font-size: 19px;
+    }
+
+    .close-button {
+      padding: 6px 10px;
+      color: #475569;
+      background: #f1f5f9;
+    }
+
+    .dialog-body {
+      max-height: calc(100vh - 150px);
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .ai-panel {
+      padding: 16px;
+      margin-bottom: 18px;
+      border: 1px solid #bfdbfe;
+      border-radius: 10px;
+      background: #eff6ff;
+    }
+
+    .ai-panel-title {
+      margin: 0 0 5px;
+      font-size: 16px;
+    }
+
+    .ai-panel-hint {
+      margin: 0 0 13px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .ai-upload-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .ai-result {
+      min-height: 20px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .ai-result strong { color: var(--text); }
+
+    .span-all { grid-column: 1 / -1; }
+
+    textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+
+    .form-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .form-message {
+      min-height: 20px;
+      margin-top: 12px;
+      font-size: 13px;
+    }
+
+    .success { color: var(--success); }
+    .error { color: var(--danger); }
+
+    @media (max-width: 900px) {
+      .kpis { grid-template-columns: repeat(2, 1fr); }
+      .form-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 620px) {
+      .header { align-items: flex-start; flex-direction: column; }
+      .kpis, .form-grid { grid-template-columns: 1fr; }
+      .ai-upload-row { grid-template-columns: 1fr; }
+      .search-input { min-width: 100%; }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>订单台账</h1>
+        <p class="subtitle">销售与采购订单、开票关联和收付款状态总览</p>
+      </div>
+
+      <div class="header-actions">
+        <a class="button-link" href="/">发票台账</a>
+        <button id="create-button">新增订单</button>
+        <button id="refresh-button">刷新台账</button>
+      </div>
+    </header>
+
+    <section class="filters">
+      <div class="filter-item">
+        <label for="type-filter">订单类型</label>
+        <select id="type-filter">
+          <option value="">全部类型</option>
+          <option value="销售订单">销售订单</option>
+          <option value="采购订单">采购订单</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="invoice-filter">开票状态</label>
+        <select id="invoice-filter">
+          <option value="">全部状态</option>
+          <option value="未开票">未开票</option>
+          <option value="已关联发票">已关联发票</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="keyword-filter">关键词</label>
+        <input
+          id="keyword-filter"
+          class="search-input"
+          placeholder="订单号、合同号、往来单位、发票号"
+        >
+      </div>
+    </section>
+
+    <section class="kpis">
+      <article class="kpi-card">
+        <div class="kpi-label">订单数量</div>
+        <div class="kpi-value" id="kpi-count">0</div>
+        <div class="kpi-hint">当前筛选结果</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">销售订单金额</div>
+        <div class="kpi-value" id="kpi-sales">¥0.00</div>
+        <div class="kpi-hint">筛选结果中的销售订单</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">采购订单金额</div>
+        <div class="kpi-value" id="kpi-purchase">¥0.00</div>
+        <div class="kpi-hint">筛选结果中的采购订单</div>
+      </article>
+
+      <article class="kpi-card">
+        <div class="kpi-label">未开票订单</div>
+        <div class="kpi-value" id="kpi-uninvoiced">0</div>
+        <div class="kpi-hint">尚未关联任何发票</div>
+      </article>
+    </section>
+
+    <section class="table-card">
+      <div class="table-title">
+        <h2>订单明细</h2>
+        <span id="status-message" class="status-message">正在加载…</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>订单号 / 合同号</th>
+              <th>类型</th>
+              <th>往来单位</th>
+              <th>订单金额</th>
+              <th>累计收付 / 剩余</th>
+              <th>订单 / 交付日期</th>
+              <th>到期日</th>
+              <th>开票状态 / 发票号</th>
+              <th>收付款状态</th>
+              <th>负责人</th>
+            </tr>
+          </thead>
+          <tbody id="order-table-body"></tbody>
+        </table>
+      </div>
+
+      <div id="empty-message" class="empty" hidden>暂无符合条件的订单。</div>
+    </section>
+  </main>
+
+  <dialog id="order-dialog">
+    <div class="dialog-header">
+      <h2>新增订单</h2>
+      <button id="close-dialog-button" class="close-button" type="button">关闭</button>
+    </div>
+
+    <div class="dialog-body">
+      <form id="order-form">
+        <section class="ai-panel">
+          <h3 class="ai-panel-title">AI 智能识别</h3>
+          <p class="ai-panel-hint">
+            先选择下方订单类型，再上传订单或合同图片。AI 只负责回填，保存前请人工核对。
+          </p>
+
+          <div class="ai-upload-row">
+            <label class="field">
+              订单或合同图片
+              <input
+                id="order-file"
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+              >
+            </label>
+
+            <button id="recognize-button" type="button">开始智能识别</button>
+          </div>
+
+          <div id="recognize-message" class="ai-result" aria-live="polite">
+            当前支持 PNG、JPG、WEBP 图片；扫描 PDF 请先转换为图片。
+          </div>
+        </section>
+
+        <div class="form-grid">
+          <label class="field">
+            订单类型
+            <select id="order-type" required>
+              <option value="销售订单">销售订单</option>
+              <option value="采购订单">采购订单</option>
+            </select>
+          </label>
+
+          <label class="field">
+            订单号
+            <input id="order-number" required>
+          </label>
+
+          <label class="field">
+            合同号
+            <input id="contract-number">
+          </label>
+
+          <label class="field">
+            往来单位
+            <input id="counterparty-name">
+          </label>
+
+          <label class="field">
+            订单日期
+            <input id="order-date" type="date">
+          </label>
+
+          <label class="field">
+            交付日期
+            <input id="delivery-date" type="date">
+          </label>
+
+          <label class="field">
+            订单金额
+            <input id="order-amount" type="number" min="0.01" step="0.01" required>
+          </label>
+
+          <label class="field">
+            预付款金额
+            <input id="prepayment-amount" type="number" min="0" step="0.01" value="0">
+          </label>
+
+          <label class="field">
+            累计收付款金额
+            <input id="paid-amount" type="number" min="0" step="0.01" value="0">
+          </label>
+
+          <label class="field">
+            到期日
+            <input id="due-date" type="date">
+          </label>
+
+          <label class="field">
+            负责人
+            <input id="owner">
+          </label>
+
+          <label class="field">
+            复核状态
+            <select id="review-status">
+              <option value="待人工确认">待人工确认</option>
+              <option value="已确认">已确认</option>
+              <option value="需人工复核">需人工复核</option>
+            </select>
+          </label>
+
+          <label class="field">
+            结算方式
+            <input id="settlement-method" placeholder="例如：银行转账">
+          </label>
+
+          <label class="field span-all">
+            付款账期说明
+            <textarea id="payment-terms" placeholder="例如：发票开具后 30 天内付款"></textarea>
+          </label>
+
+          <label class="field span-all">
+            复核备注（每行一条）
+            <textarea id="review-notes"></textarea>
+          </label>
+        </div>
+
+        <div class="form-actions">
+          <button id="cancel-button" class="close-button" type="button">取消</button>
+          <button id="save-button" type="submit">保存订单</button>
+        </div>
+
+        <div id="form-message" class="form-message" aria-live="polite"></div>
+      </form>
+    </div>
+  </dialog>
+
+  <script>
+    const state = {
+      orders: [],
+      filteredOrders: [],
+      draftSourceFilename: null,
+      draftRawDifyOutput: {}
+    };
+
+    const moneyFormatter = new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 2
+    });
+
+    function formatMoney(value) {
+      return moneyFormatter.format(Number(value || 0));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function outstandingAmount(order) {
+      return Math.max(
+        0,
+        Number(order.order_amount || 0) - Number(order.paid_amount || 0)
+      );
+    }
+
+    function getTagClass(status) {
+      if (["已关联发票", "已收款", "已付款", "已确认"].includes(status)) {
+        return "tag-success";
+      }
+
+      if (["部分收款", "部分付款", "待人工确认"].includes(status)) {
+        return "tag-warning";
+      }
+
+      if (["未开票", "未收款", "未付款", "需人工复核"].includes(status)) {
+        return "tag-danger";
+      }
+
+      return "tag-neutral";
+    }
+
+    function applyFilters() {
+      const orderType = document.getElementById("type-filter").value;
+      const invoiceStatus = document.getElementById("invoice-filter").value;
+      const keyword = document.getElementById("keyword-filter").value
+        .trim()
+        .toLowerCase();
+
+      state.filteredOrders = state.orders.filter((order) => {
+        if (orderType && order.order_type !== orderType) return false;
+        if (invoiceStatus && order.invoice_status !== invoiceStatus) return false;
+
+        const searchableText = [
+          order.order_number,
+          order.contract_number,
+          order.counterparty_name,
+          ...(order.invoice_numbers || [])
+        ].join(" ").toLowerCase();
+
+        return !keyword || searchableText.includes(keyword);
+      });
+
+      renderDashboard();
+    }
+
+    function renderKpis() {
+      const orders = state.filteredOrders;
+
+      const salesAmount = orders
+        .filter((item) => item.order_type === "销售订单")
+        .reduce((sum, item) => sum + Number(item.order_amount || 0), 0);
+
+      const purchaseAmount = orders
+        .filter((item) => item.order_type === "采购订单")
+        .reduce((sum, item) => sum + Number(item.order_amount || 0), 0);
+
+      document.getElementById("kpi-count").textContent = orders.length;
+      document.getElementById("kpi-sales").textContent = formatMoney(salesAmount);
+      document.getElementById("kpi-purchase").textContent = formatMoney(purchaseAmount);
+      document.getElementById("kpi-uninvoiced").textContent =
+        orders.filter((item) => item.invoice_status === "未开票").length;
+    }
+
+    function renderTable() {
+      const body = document.getElementById("order-table-body");
+      const empty = document.getElementById("empty-message");
+
+      if (state.filteredOrders.length === 0) {
+        body.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+
+      empty.hidden = true;
+
+      body.innerHTML = state.filteredOrders.map((order) => {
+        const invoices = (order.invoice_numbers || [])
+          .map(escapeHtml)
+          .join("<br>");
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(order.order_number)}</strong>
+              <div class="muted">合同：${escapeHtml(order.contract_number || "-")}</div>
+            </td>
+            <td>${escapeHtml(order.order_type)}</td>
+            <td>${escapeHtml(order.counterparty_name || "-")}</td>
+            <td class="amount">${formatMoney(order.order_amount)}</td>
+            <td class="amount">
+              <div>${formatMoney(order.paid_amount)}</div>
+              <div class="muted">剩余：${formatMoney(outstandingAmount(order))}</div>
+            </td>
+            <td>
+              <div>${escapeHtml(order.order_date || "-")}</div>
+              <div class="muted">交付：${escapeHtml(order.delivery_date || "-")}</div>
+            </td>
+            <td>${escapeHtml(order.due_date || "待填写")}</td>
+            <td>
+              <span class="tag ${getTagClass(order.invoice_status)}">
+                ${escapeHtml(order.invoice_status)}
+              </span>
+              <div class="muted">${invoices || "暂无发票"}</div>
+            </td>
+            <td>
+              <span class="tag ${getTagClass(order.payment_status)}">
+                ${escapeHtml(order.payment_status)}
+              </span>
+            </td>
+            <td>${escapeHtml(order.owner || "待分配")}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderDashboard() {
+      renderKpis();
+      renderTable();
+      document.getElementById("status-message").textContent =
+        `当前展示 ${state.filteredOrders.length} 条记录`;
+    }
+
+    async function loadOrders() {
+      const status = document.getElementById("status-message");
+      status.textContent = "正在加载…";
+
+      try {
+        const response = await fetch("/api/orders");
+        const result = await response.json();
+
+        if (!response.ok) throw new Error("订单台账请求失败。");
+
+        state.orders = result.items || [];
+        applyFilters();
+      } catch (error) {
+        console.error(error);
+        state.orders = [];
+        state.filteredOrders = [];
+        renderDashboard();
+        status.textContent = "加载失败，请确认后端服务正在运行。";
+      }
+    }
+
+    function numberValue(id) {
+      const value = document.getElementById(id).value;
+      return value === "" ? 0 : Number(value);
+    }
+
+    function nullableValue(id) {
+      const value = document.getElementById(id).value.trim();
+      return value || null;
+    }
+
+    function splitNotes(value) {
+      return value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function setFormMessage(message, type = "") {
+      const element = document.getElementById("form-message");
+      element.textContent = message;
+      element.className = `form-message ${type}`;
+    }
+
+    function setRecognizeMessage(message, type = "") {
+      const element = document.getElementById("recognize-message");
+      element.innerHTML = message;
+      element.className = `ai-result ${type}`;
+    }
+
+    function setInputValue(id, value) {
+      document.getElementById(id).value = value ?? "";
+    }
+
+    function resetOrderForm() {
+      document.getElementById("order-form").reset();
+      document.getElementById("prepayment-amount").value = 0;
+      document.getElementById("paid-amount").value = 0;
+      document.getElementById("review-status").value = "待人工确认";
+      state.draftSourceFilename = null;
+      state.draftRawDifyOutput = {};
+      setFormMessage("");
+      setRecognizeMessage(
+        "当前支持 PNG、JPG、WEBP 图片；扫描 PDF 请先转换为图片。"
+      );
+    }
+
+    function fillRecognizedOrder(order, outputs) {
+      if (order.order_type) {
+        setInputValue("order-type", order.order_type);
+      }
+
+      setInputValue("order-number", order.order_number);
+      setInputValue("contract-number", order.contract_number);
+      setInputValue("counterparty-name", order.counterparty_name);
+      setInputValue("order-date", order.order_date);
+      setInputValue("delivery-date", order.delivery_date);
+      setInputValue("order-amount", order.order_amount);
+      setInputValue("settlement-method", order.settlement_method);
+      setInputValue("payment-terms", order.payment_terms);
+
+      const reviewStatus = order.review_status || outputs.review_status;
+      if (["待人工确认", "已确认", "需人工复核"].includes(reviewStatus)) {
+        setInputValue("review-status", reviewStatus);
+      }
+
+      const notes = order.review_notes || outputs.review_notes || [];
+      setInputValue("review-notes", notes.join("\n"));
+
+      const missing = order.missing_fields || outputs.missing_fields || [];
+      const amountCheck = outputs.amount_check_passed === true
+        ? "金额格式正常"
+        : "金额需要复核";
+      const dateCheck = outputs.date_check_passed === true
+        ? "日期检查通过"
+        : "日期需要复核";
+      const missingText = missing.length
+        ? `待补充：${missing.map(escapeHtml).join("、")}`
+        : "未发现缺失字段";
+
+      setRecognizeMessage(
+        `<strong>识别完成。</strong> ${escapeHtml(amountCheck)}；` +
+        `${escapeHtml(dateCheck)}；${missingText}。请核对后保存。`,
+        outputs.date_check_passed === false ? "error" : "success"
+      );
+    }
+
+    document.getElementById("create-button").addEventListener("click", () => {
+      resetOrderForm();
+      document.getElementById("order-dialog").showModal();
+    });
+
+    document.getElementById("recognize-button").addEventListener("click", async () => {
+      const fileInput = document.getElementById("order-file");
+      const recognizeButton = document.getElementById("recognize-button");
+      const file = fileInput.files[0];
+
+      if (!file) {
+        setRecognizeMessage("请先选择订单或合同图片。", "error");
+        return;
+      }
+
+      if (!file.type.startsWith("image/")) {
+        setRecognizeMessage("当前只支持 PNG、JPG、WEBP 图片。", "error");
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append("order_type", document.getElementById("order-type").value);
+      formData.append("order_file", file);
+
+      recognizeButton.disabled = true;
+      state.draftSourceFilename = null;
+      state.draftRawDifyOutput = {};
+      setRecognizeMessage("正在上传并识别，请稍候……");
+
+      try {
+        const response = await fetch("/api/dify/orders/extract", {
+          method: "POST",
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const detail = typeof result.detail === "string"
+            ? result.detail
+            : JSON.stringify(result.detail);
+          throw new Error(detail || "订单识别失败。");
+        }
+
+        if (result.status !== "succeeded") {
+          throw new Error(`Dify Workflow 状态：${result.status || "未知"}`);
+        }
+
+        const outputs = result.outputs || {};
+        let recognizedOrder = outputs.structured_output || outputs.normalized_order;
+
+        if (typeof recognizedOrder === "string") {
+          recognizedOrder = JSON.parse(recognizedOrder);
+        }
+
+        if (!recognizedOrder || typeof recognizedOrder !== "object") {
+          throw new Error("Dify 没有返回订单结构化数据。");
+        }
+
+        state.draftSourceFilename = file.name;
+        state.draftRawDifyOutput = result;
+        fillRecognizedOrder(recognizedOrder, outputs);
+      } catch (error) {
+        setRecognizeMessage(`识别失败：${escapeHtml(error.message)}`, "error");
+      } finally {
+        recognizeButton.disabled = false;
+      }
+    });
+
+    document.getElementById("close-dialog-button").addEventListener("click", () => {
+      document.getElementById("order-dialog").close();
+    });
+
+    document.getElementById("cancel-button").addEventListener("click", () => {
+      document.getElementById("order-dialog").close();
+    });
+
+    document.getElementById("order-form").addEventListener("submit", async (event) => {
+      event.preventDefault();
+
+      const orderAmount = numberValue("order-amount");
+      const prepaymentAmount = numberValue("prepayment-amount");
+      const paidAmount = numberValue("paid-amount");
+      const saveButton = document.getElementById("save-button");
+
+      if (paidAmount > orderAmount) {
+        setFormMessage("累计收付款金额不能大于订单金额。", "error");
+        return;
+      }
+
+      if (prepaymentAmount > paidAmount) {
+        setFormMessage("预付款不能大于累计收付款金额。", "error");
+        return;
+      }
+
+      const payload = {
+        order_type: document.getElementById("order-type").value,
+        order_number: document.getElementById("order-number").value.trim(),
+        contract_number: nullableValue("contract-number"),
+        counterparty_name: nullableValue("counterparty-name"),
+        order_date: document.getElementById("order-date").value || null,
+        delivery_date: document.getElementById("delivery-date").value || null,
+        order_amount: orderAmount,
+        settlement_method: nullableValue("settlement-method"),
+        payment_terms: nullableValue("payment-terms"),
+        prepayment_amount: prepaymentAmount,
+        paid_amount: paidAmount,
+        due_date: document.getElementById("due-date").value || null,
+        owner: nullableValue("owner"),
+        review_status: document.getElementById("review-status").value,
+        review_notes: splitNotes(document.getElementById("review-notes").value),
+        source_filename: state.draftSourceFilename,
+        raw_dify_output: state.draftRawDifyOutput
+      };
+
+      saveButton.disabled = true;
+      setFormMessage("正在保存…");
+
+      try {
+        const response = await fetch("/api/orders", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const detail = typeof result.detail === "string"
+            ? result.detail
+            : JSON.stringify(result.detail);
+
+          throw new Error(detail);
+        }
+
+        setFormMessage(
+          `保存成功：${result.order_number}，${result.payment_status}`,
+          "success"
+        );
+
+        await loadOrders();
+
+        setTimeout(() => {
+          document.getElementById("order-dialog").close();
+        }, 700);
+      } catch (error) {
+        setFormMessage(`保存失败：${error.message}`, "error");
+      } finally {
+        saveButton.disabled = false;
+      }
+    });
+
+    document.getElementById("refresh-button").addEventListener("click", loadOrders);
+    document.getElementById("type-filter").addEventListener("change", applyFilters);
+    document.getElementById("invoice-filter").addEventListener("change", applyFilters);
+    document.getElementById("keyword-filter").addEventListener("input", applyFilters);
+
+    loadOrders();
+  </script>
+</body>
+</html>

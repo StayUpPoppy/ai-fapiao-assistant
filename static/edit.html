@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>更新发票台账</title>
+
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --border: #e5e7eb;
+      --success: #15803d;
+      --danger: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .back {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 18px 0 6px;
+      font-size: 26px;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .card {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      font-size: 15px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+    }
+
+    .span-all { grid-column: 1 / -1; }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: #374151;
+      font-size: 13px;
+    }
+
+    input, select, textarea, button {
+      font: inherit;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      background: white;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #93c5fd;
+      outline: 3px solid #dbeafe;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 16px;
+      padding: 10px 18px;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      cursor: pointer;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .message {
+      min-height: 20px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .success { color: var(--success); }
+    .error { color: var(--danger); }
+    .hidden { display: none; }
+
+    @media (max-width: 650px) {
+      .summary,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <a class="back" href="/">← 返回台账总览</a>
+
+    <h1>更新发票台账</h1>
+    <p class="subtitle">维护收付款进度、账期、负责人和复核状态。</p>
+
+    <div id="loading-message" class="card">正在加载台账数据……</div>
+
+    <div id="content" class="hidden">
+      <section class="card">
+        <div class="summary">
+          <div>
+            <div class="summary-label">发票号码</div>
+            <div id="invoice-number" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">往来单位</div>
+            <div id="counterparty" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">价税合计</div>
+            <div id="amount-total" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">单据类型</div>
+            <div id="document-type" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">当前收付款状态</div>
+            <div id="payment-status" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">开票日期</div>
+            <div id="invoice-date" class="summary-value">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="form-grid">
+          <label>
+            到期日
+            <input id="due-date" type="date">
+          </label>
+
+          <label>
+            负责人
+            <input id="owner" placeholder="例如：张三">
+          </label>
+
+          <label>
+            预付款金额
+            <input
+              id="prepayment-amount"
+              type="number"
+              min="0"
+              step="0.01"
+            >
+          </label>
+
+          <label>
+            累计收付款金额
+            <input
+              id="paid-amount"
+              type="number"
+              min="0"
+              step="0.01"
+            >
+            <span class="hint">累计金额需包含预付款。</span>
+          </label>
+
+          <label>
+            复核状态
+            <select id="review-status">
+              <option value="待人工确认">待人工确认</option>
+              <option value="已确认">已确认</option>
+              <option value="需人工复核">需人工复核</option>
+            </select>
+          </label>
+
+          <label class="span-all">
+            复核备注（每行一条）
+            <textarea id="review-notes"></textarea>
+          </label>
+        </div>
+
+        <button id="save-button">保存更新</button>
+        <div id="save-message" class="message" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      invoiceId: null,
+      invoice: null
+    };
+
+    const moneyFormatter = new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 2
+    });
+
+    function setMessage(message, type = "") {
+      const element = document.getElementById("save-message");
+      element.textContent = message;
+      element.className = `message ${type}`;
+    }
+
+    function getInvoiceId() {
+      const params = new URLSearchParams(window.location.search);
+      return Number(params.get("id"));
+    }
+
+    function numberValue(id) {
+      const value = document.getElementById(id).value;
+      return value === "" ? 0 : Number(value);
+    }
+
+    function splitNotes(value) {
+      return value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function renderInvoice(invoice) {
+      const counterparty = invoice.document_type === "销售发票"
+        ? invoice.buyer_name
+        : invoice.seller_name;
+
+      document.getElementById("invoice-number").textContent =
+        invoice.invoice_number || "-";
+
+      document.getElementById("counterparty").textContent =
+        counterparty || "-";
+
+      document.getElementById("amount-total").textContent =
+        moneyFormatter.format(Number(invoice.amount_incl_tax || 0));
+
+      document.getElementById("document-type").textContent =
+        invoice.document_type || "-";
+
+      document.getElementById("payment-status").textContent =
+        invoice.payment_status || "-";
+
+      document.getElementById("invoice-date").textContent =
+        invoice.invoice_date || "-";
+
+      document.getElementById("due-date").value =
+        invoice.due_date || "";
+
+      document.getElementById("owner").value =
+        invoice.owner || "";
+
+      document.getElementById("prepayment-amount").value =
+        Number(invoice.prepayment_amount || 0);
+
+      document.getElementById("paid-amount").value =
+        Number(invoice.paid_amount || 0);
+
+      document.getElementById("review-status").value =
+        invoice.review_status || "待人工确认";
+
+      document.getElementById("review-notes").value =
+        (invoice.review_notes || []).join("\n");
+    }
+
+    async function loadInvoice() {
+      state.invoiceId = getInvoiceId();
+
+      if (!state.invoiceId) {
+        document.getElementById("loading-message").textContent =
+          "缺少有效的台账编号。";
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/invoices");
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error("读取台账失败。");
+        }
+
+        state.invoice = (result.items || []).find(
+          (item) => Number(item.id) === state.invoiceId
+        );
+
+        if (!state.invoice) {
+          throw new Error("未找到该发票台账。");
+        }
+
+        renderInvoice(state.invoice);
+
+        document.getElementById("loading-message").classList.add("hidden");
+        document.getElementById("content").classList.remove("hidden");
+      } catch (error) {
+        document.getElementById("loading-message").textContent =
+          error.message;
+      }
+    }
+
+    document.getElementById("save-button").addEventListener("click", async () => {
+      const paidAmount = numberValue("paid-amount");
+      const prepaymentAmount = numberValue("prepayment-amount");
+      const totalAmount = Number(state.invoice.amount_incl_tax || 0);
+      const button = document.getElementById("save-button");
+
+      if (paidAmount > totalAmount) {
+        setMessage("累计收付款金额不能大于价税合计。", "error");
+        return;
+      }
+
+      if (prepaymentAmount > paidAmount) {
+        setMessage("预付款不能大于累计收付款金额。", "error");
+        return;
+      }
+
+      const payload = {
+        due_date: document.getElementById("due-date").value || null,
+        owner: document.getElementById("owner").value.trim() || null,
+        prepayment_amount: prepaymentAmount,
+        paid_amount: paidAmount,
+        review_status: document.getElementById("review-status").value,
+        review_notes: splitNotes(
+          document.getElementById("review-notes").value
+        )
+      };
+
+      button.disabled = true;
+      setMessage("正在保存……");
+
+      try {
+        const response = await fetch(
+          `/api/invoices/${state.invoiceId}`,
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(payload)
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const detail = typeof result.detail === "string"
+            ? result.detail
+            : JSON.stringify(result.detail);
+
+          throw new Error(detail);
+        }
+
+        state.invoice = {
+          ...state.invoice,
+          ...payload,
+          payment_status: result.payment_status
+        };
+
+        document.getElementById("payment-status").textContent =
+          result.payment_status;
+
+        setMessage(
+          `保存成功，当前状态：${result.payment_status}`,
+          "success"
+        );
+      } catch (error) {
+        setMessage(`保存失败：${error.message}`, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    loadInvoice();
+  </script>
+</body>
+</html>

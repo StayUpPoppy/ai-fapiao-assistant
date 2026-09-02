@@ -216,6 +216,21 @@
       text-align: center;
     }
 
+    .table-action {
+      display: inline-block;
+      padding: 6px 10px;
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      background: #eff6ff;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .table-action:hover {
+      background: #dbeafe;
+    }
+
     .reminder-card {
       margin-bottom: 16px;
       padding: 18px;
@@ -301,6 +316,7 @@
         <p class="subtitle">发票识别、人工复核、账期管理与收付款跟踪</p>
       </div>
       <div class="header-actions">
+        <a class="button-link" href="/static/orders.html">订单台账</a>
         <a class="button-link" href="/static/entry.html">智能录入发票</a>
         <button id="refresh-button">刷新台账</button>
       </div>
@@ -404,6 +420,7 @@
               <th>收付款状态</th>
               <th>复核状态</th>
               <th>关联订单</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="invoice-table-body"></tbody>
@@ -568,6 +585,14 @@
               </span>
             </td>
             <td>${orderNumbers || "-"}</td>
+            <td>
+              <a
+                class="table-action"
+                href="/static/edit.html?id=${Number(invoice.id)}"
+              >
+                更新
+              </a>
+            </td>
           </tr>
         `;
       }).join("");
