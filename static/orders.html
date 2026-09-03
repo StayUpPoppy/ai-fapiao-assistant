@@ -223,6 +223,17 @@
     .tag-danger { color: var(--danger); background: #fee2e2; }
     .tag-neutral { color: #475569; background: #e2e8f0; }
 
+    .action-link {
+      display: inline-block;
+      padding: 5px 9px;
+      color: var(--primary);
+      border: 1px solid #bfdbfe;
+      border-radius: 6px;
+      background: #eff6ff;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
     .empty {
       padding: 42px;
       color: var(--muted);
@@ -354,6 +365,7 @@
 
       <div class="header-actions">
         <a class="button-link" href="/">发票台账</a>
+        <a class="button-link" href="/api/export/ledger.xlsx">导出 Excel</a>
         <button id="create-button">新增订单</button>
         <button id="refresh-button">刷新台账</button>
       </div>
@@ -434,6 +446,7 @@
               <th>开票状态 / 发票号</th>
               <th>收付款状态</th>
               <th>负责人</th>
+              <th>操作</th>
             </tr>
           </thead>
           <tbody id="order-table-body"></tbody>
@@ -709,6 +722,12 @@
               </span>
             </td>
             <td>${escapeHtml(order.owner || "待分配")}</td>
+            <td>
+              <a
+                class="action-link"
+                href="/static/order-edit.html?id=${encodeURIComponent(order.id)}"
+              >编辑</a>
+            </td>
           </tr>
         `;
       }).join("");

@@ -9,9 +9,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from typing import Any, Literal
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, StreamingResponse
 from datetime import date
+from io import BytesIO
+from openpyxl import Workbook
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from fastapi.staticfiles import StaticFiles
 import base64
 import hashlib
 import hmac
@@ -137,6 +141,19 @@ def init_database():
             )
         """)
         connection.execute("""
+            CREATE TABLE IF NOT EXISTS order_notification_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id INTEGER NOT NULL,
+                channel TEXT NOT NULL,
+                event_key TEXT NOT NULL,
+                reminder_status TEXT NOT NULL,
+                due_date TEXT NOT NULL,
+                sent_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (order_id) REFERENCES orders(id),
+                UNIQUE(order_id, channel, event_key)
+            )
+        """)
+        connection.execute("""
             CREATE TABLE IF NOT EXISTS orders (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 order_number TEXT NOT NULL,
@@ -214,6 +231,29 @@ class OrderCreate(BaseModel):
     review_notes: list[str] = Field(default_factory=list)
     source_filename: str | None = None
     raw_dify_output: dict[str, Any] = Field(default_factory=dict)
+
+
+class OrderUpdate(BaseModel):
+    contract_number: str | None = None
+    counterparty_name: str | None = None
+    order_date: str | None = None
+    delivery_date: str | None = None
+    order_amount: float | None = Field(default=None, gt=0)
+    settlement_method: str | None = None
+    payment_terms: str | None = None
+
+    prepayment_amount: float | None = Field(default=None, ge=0)
+    paid_amount: float | None = Field(default=None, ge=0)
+    due_date: str | None = None
+    owner: str | None = None
+
+    review_status: Literal[
+        "待人工确认",
+        "已确认",
+        "需人工复核"
+    ] | None = None
+
+    review_notes: list[str] | None = None
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(STATIC_DIR / "index.html")
@@ -675,11 +715,33 @@ def get_due_reminders(days_before: int):
 
     with closing(get_db_connection()) as connection:
         rows = connection.execute(
-            "SELECT * FROM invoices"
+            """
+            SELECT
+                invoices.*,
+                GROUP_CONCAT(
+                    invoice_order_links.order_number
+                ) AS order_numbers_text
+            FROM invoices
+            LEFT JOIN invoice_order_links
+                ON invoice_order_links.invoice_id =
+                   invoices.id
+            GROUP BY invoices.id
+            """
         ).fetchall()
 
     for row in rows:
         invoice = dict(row)
+
+        order_numbers_text = invoice.pop(
+            "order_numbers_text",
+            None
+        )
+
+        order_numbers = (
+            order_numbers_text.split(",")
+            if order_numbers_text
+            else []
+        )
 
         if not invoice["due_date"]:
             continue
@@ -719,9 +781,11 @@ def get_due_reminders(days_before: int):
         )
 
         reminders.append({
+            "source_type": "invoice",
             "invoice_id": invoice["id"],
             "invoice_number": invoice["invoice_number"],
             "document_type": invoice["document_type"],
+            "order_numbers": order_numbers,
             "counterparty": counterparty,
             "due_date": invoice["due_date"],
             "days_to_due": days_to_due,
@@ -736,7 +800,170 @@ def get_due_reminders(days_before: int):
         key=lambda item: item["days_to_due"]
     )
 
+def get_order_due_reminders(days_before: int):
+    today = date.today()
+    reminders = []
 
+    with closing(get_db_connection()) as connection:
+        rows = connection.execute(
+            "SELECT * FROM orders"
+        ).fetchall()
+
+    for row in rows:
+        order = dict(row)
+
+        # 没填写到期日的订单暂不提醒
+        if not order["due_date"]:
+            continue
+
+        try:
+            due_date_value = date.fromisoformat(
+                order["due_date"]
+            )
+        except ValueError:
+            continue
+
+        amount_due = round(
+            max(
+                0,
+                order["order_amount"] - order["paid_amount"]
+            ),
+            2
+        )
+
+        # 已经完全收款或付款的订单不提醒
+        if amount_due <= 0.01:
+            continue
+
+        days_to_due = (
+            due_date_value - today
+        ).days
+
+        if days_to_due < 0:
+            reminder_status = "已逾期"
+        elif days_to_due == 0:
+            reminder_status = "今日到期"
+        elif days_to_due <= days_before:
+            reminder_status = "即将到期"
+        else:
+            continue
+
+        reminders.append({
+            "source_type": "order",
+            "order_id": order["id"],
+            "order_number": order["order_number"],
+            "order_type": order["order_type"],
+            "counterparty": order["counterparty_name"],
+            "due_date": order["due_date"],
+            "days_to_due": days_to_due,
+            "amount_due": amount_due,
+            "payment_status": order["payment_status"],
+            "owner": order["owner"],
+            "reminder_status": reminder_status
+        })
+
+    return sorted(
+        reminders,
+        key=lambda item: item["days_to_due"]
+    )
+
+def get_combined_due_reminders(
+    days_before: int
+) -> list[dict]:
+    invoice_reminders = get_due_reminders(
+        days_before
+    )
+
+    order_reminders = get_order_due_reminders(
+        days_before
+    )
+
+    # 记录已由发票承担提醒的订单
+    covered_orders = set()
+
+    for reminder in invoice_reminders:
+        if reminder["document_type"] == "销售发票":
+            matching_order_type = "销售订单"
+        elif reminder["document_type"] == "采购发票":
+            matching_order_type = "采购订单"
+        else:
+            continue
+
+        for order_number in reminder.get(
+            "order_numbers",
+            []
+        ):
+            covered_orders.add(
+                (
+                    matching_order_type,
+                    order_number
+                )
+            )
+
+    filtered_order_reminders = []
+
+    for reminder in order_reminders:
+        order_key = (
+            reminder["order_type"],
+            reminder["order_number"]
+        )
+
+        if order_key in covered_orders:
+            continue
+
+        filtered_order_reminders.append(
+            reminder
+        )
+
+    combined = (
+        invoice_reminders
+        + filtered_order_reminders
+    )
+
+    return sorted(
+        combined,
+        key=lambda item: item["days_to_due"]
+    )
+
+@app.get("/api/reminders/all/due")
+def list_all_due_reminders(
+    days_before: int = 7
+):
+    if days_before < 0 or days_before > 90:
+        raise HTTPException(
+            status_code=422,
+            detail="days_before 必须在 0 到 90 之间。"
+        )
+
+    invoice_reminders = get_due_reminders(
+        days_before
+    )
+
+    order_reminders = get_order_due_reminders(
+        days_before
+    )
+
+    combined = get_combined_due_reminders(
+        days_before
+    )
+
+    return {
+        "today": date.today().isoformat(),
+        "days_before": days_before,
+        "invoice_total_before_dedup": len(
+            invoice_reminders
+        ),
+        "order_total_before_dedup": len(
+            order_reminders
+        ),
+        "suppressed_duplicate_total": (
+            len(invoice_reminders)
+            + len(order_reminders)
+            - len(combined)
+        ),
+        "total": len(combined),
+        "items": combined
+    }
 @app.get("/api/reminders/due")
 def list_due_reminders(days_before: int = 7):
     if days_before < 0 or days_before > 90:
@@ -746,6 +973,27 @@ def list_due_reminders(days_before: int = 7):
         )
 
     reminders = get_due_reminders(days_before)
+
+    return {
+        "today": date.today().isoformat(),
+        "days_before": days_before,
+        "total": len(reminders),
+        "items": reminders
+    }
+
+@app.get("/api/reminders/orders/due")
+def list_order_due_reminders(
+    days_before: int = 7
+):
+    if days_before < 0 or days_before > 90:
+        raise HTTPException(
+            status_code=422,
+            detail="days_before 必须在 0 到 90 之间。"
+        )
+
+    reminders = get_order_due_reminders(
+        days_before
+    )
 
     return {
         "today": date.today().isoformat(),
@@ -841,39 +1089,95 @@ async def test_dingtalk_notification():
         "dingtalk_response": result
     }
 
-def build_due_reminder_message(reminders: list[dict]) -> str:
+def build_due_reminder_message(
+    reminders: list[dict]
+) -> str:
     lines = [
-        "【发票台账提醒】",
+        "【供应链账期提醒】",
         f"统计日期：{date.today().isoformat()}",
         f"待跟进单据：{len(reminders)} 笔",
         ""
     ]
 
-    for index, item in enumerate(reminders, start=1):
+    for index, item in enumerate(
+        reminders,
+        start=1
+    ):
         days_to_due = item["days_to_due"]
 
         if days_to_due < 0:
-            time_description = f"已逾期 {abs(days_to_due)} 天"
+            time_description = (
+                f"已逾期 {abs(days_to_due)} 天"
+            )
         elif days_to_due == 0:
             time_description = "今日到期"
         else:
-            time_description = f"剩余 {days_to_due} 天"
+            time_description = (
+                f"剩余 {days_to_due} 天"
+            )
+
+        if item["source_type"] == "invoice":
+            document_type = item["document_type"]
+            number_label = "发票号码"
+            document_number = item["invoice_number"]
+
+            order_numbers = item.get(
+                "order_numbers",
+                []
+            )
+        else:
+            document_type = item["order_type"]
+            number_label = "订单号码"
+            document_number = item["order_number"]
+            order_numbers = []
+
+        is_receivable = document_type in {
+            "销售发票",
+            "销售订单"
+        }
 
         amount_label = (
             "待收款"
-            if item["document_type"] == "销售发票"
+            if is_receivable
             else "待付款"
         )
 
         lines.extend([
-            f"{index}. {item['reminder_status']}｜{item['document_type']}",
-            f"往来单位：{item['counterparty'] or '待确认'}",
-            f"发票号码：{item['invoice_number']}",
-            f"到期日期：{item['due_date']}（{time_description}）",
-            f"{amount_label}：¥{item['amount_due']:,.2f}",
-            f"负责人：{item['owner'] or '待分配'}",
-            ""
+            (
+                f"{index}. "
+                f"{item['reminder_status']}｜"
+                f"{document_type}"
+            ),
+            (
+                "往来单位："
+                f"{item['counterparty'] or '待确认'}"
+            ),
+            (
+                f"{number_label}："
+                f"{document_number}"
+            ),
+            (
+                "到期日期："
+                f"{item['due_date']}"
+                f"（{time_description}）"
+            ),
+            (
+                f"{amount_label}："
+                f"¥{item['amount_due']:,.2f}"
+            ),
+            (
+                "负责人："
+                f"{item['owner'] or '待分配'}"
+            )
         ])
+
+        if order_numbers:
+            lines.append(
+                "关联订单："
+                + "、".join(order_numbers)
+            )
+
+        lines.append("")
 
     lines.append("请相关负责人及时跟进并更新台账。")
 
@@ -888,7 +1192,9 @@ async def send_due_reminder_notification(days_before: int = 7):
             detail="days_before 必须在 0 到 90 之间。"
         )
 
-    reminders = get_due_reminders(days_before)
+    reminders = get_combined_due_reminders(
+        days_before
+    )
 
     if not reminders:
         return {
@@ -1081,6 +1387,127 @@ def list_orders():
         "items": items
     }
 
+
+@app.patch("/api/orders/{order_id}")
+def update_order(
+    order_id: int,
+    order_update: OrderUpdate
+):
+    update_data = order_update.model_dump(
+        exclude_unset=True
+    )
+
+    if not update_data:
+        raise HTTPException(
+            status_code=400,
+            detail="请至少提交一个需要更新的字段。"
+        )
+
+    numeric_fields = {
+        "order_amount",
+        "prepayment_amount",
+        "paid_amount"
+    }
+
+    for field in numeric_fields:
+        if field in update_data and update_data[field] is None:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{field} 不能设置为空。"
+            )
+
+    with closing(get_db_connection()) as connection:
+        existing = connection.execute(
+            "SELECT * FROM orders WHERE id = ?",
+            (order_id,)
+        ).fetchone()
+
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail="未找到该订单台账。"
+            )
+
+        order_amount = update_data.get(
+            "order_amount",
+            existing["order_amount"]
+        )
+
+        paid_amount = update_data.get(
+            "paid_amount",
+            existing["paid_amount"]
+        )
+
+        prepayment_amount = update_data.get(
+            "prepayment_amount",
+            existing["prepayment_amount"]
+        )
+
+        if paid_amount > order_amount:
+            raise HTTPException(
+                status_code=422,
+                detail="累计收付款金额不能大于订单金额。"
+            )
+
+        if prepayment_amount > paid_amount:
+            raise HTTPException(
+                status_code=422,
+                detail="预付款金额不能大于累计收付款金额。"
+            )
+
+        if paid_amount >= order_amount:
+            payment_status = (
+                "已收款"
+                if existing["order_type"] == "销售订单"
+                else "已付款"
+            )
+        elif paid_amount > 0:
+            payment_status = (
+                "部分收款"
+                if existing["order_type"] == "销售订单"
+                else "部分付款"
+            )
+        else:
+            payment_status = (
+                "未收款"
+                if existing["order_type"] == "销售订单"
+                else "未付款"
+            )
+
+        update_data["payment_status"] = payment_status
+
+        if "review_notes" in update_data:
+            update_data["review_notes"] = json.dumps(
+                update_data["review_notes"] or [],
+                ensure_ascii=False
+            )
+
+        assignments = ", ".join(
+            f"{field} = ?"
+            for field in update_data
+        )
+
+        values = list(update_data.values())
+        values.append(order_id)
+
+        connection.execute(
+            f"""
+            UPDATE orders
+            SET {assignments},
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            values
+        )
+
+        connection.commit()
+
+    return {
+        "id": order_id,
+        "payment_status": payment_status,
+        "message": "订单台账已更新。"
+    }
+
 def get_notification_event_key(reminder: dict) -> str | None:
     days_to_due = reminder["days_to_due"]
     due_date = reminder["due_date"]
@@ -1110,30 +1537,60 @@ def get_unsent_dingtalk_reminders(
 
     with closing(get_db_connection()) as connection:
         for reminder in reminders:
-            event_key = get_notification_event_key(reminder)
+            event_key = get_notification_event_key(
+                reminder
+            )
 
             if event_key is None:
                 continue
 
-            existing = connection.execute(
-                """
-                SELECT id
-                FROM notification_logs
-                WHERE invoice_id = ?
-                  AND channel = ?
-                  AND event_key = ?
-                """,
-                (
-                    reminder["invoice_id"],
-                    "dingtalk",
-                    event_key
-                )
-            ).fetchone()
+            source_type = reminder.get(
+                "source_type"
+            )
+
+            if source_type == "invoice":
+                existing = connection.execute(
+                    """
+                    SELECT id
+                    FROM notification_logs
+                    WHERE invoice_id = ?
+                      AND channel = ?
+                      AND event_key = ?
+                    """,
+                    (
+                        reminder["invoice_id"],
+                        "dingtalk",
+                        event_key
+                    )
+                ).fetchone()
+
+            elif source_type == "order":
+                existing = connection.execute(
+                    """
+                    SELECT id
+                    FROM order_notification_logs
+                    WHERE order_id = ?
+                      AND channel = ?
+                      AND event_key = ?
+                    """,
+                    (
+                        reminder["order_id"],
+                        "dingtalk",
+                        event_key
+                    )
+                ).fetchone()
+
+            else:
+                continue
 
             if existing is None:
                 reminder_with_event = dict(reminder)
-                reminder_with_event["event_key"] = event_key
-                unsent.append(reminder_with_event)
+                reminder_with_event["event_key"] = (
+                    event_key
+                )
+                unsent.append(
+                    reminder_with_event
+                )
 
     return unsent
 
@@ -1142,32 +1599,56 @@ def record_dingtalk_notifications(
 ) -> None:
     with closing(get_db_connection()) as connection:
         for reminder in reminders:
-            connection.execute(
-                """
-                INSERT OR IGNORE INTO notification_logs (
-                    invoice_id,
-                    channel,
-                    event_key,
-                    reminder_status,
-                    due_date
+            if reminder["source_type"] == "invoice":
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO notification_logs (
+                        invoice_id,
+                        channel,
+                        event_key,
+                        reminder_status,
+                        due_date
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        reminder["invoice_id"],
+                        "dingtalk",
+                        reminder["event_key"],
+                        reminder["reminder_status"],
+                        reminder["due_date"]
+                    )
                 )
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    reminder["invoice_id"],
-                    "dingtalk",
-                    reminder["event_key"],
-                    reminder["reminder_status"],
-                    reminder["due_date"]
+
+            elif reminder["source_type"] == "order":
+                connection.execute(
+                    """
+                    INSERT OR IGNORE INTO order_notification_logs (
+                        order_id,
+                        channel,
+                        event_key,
+                        reminder_status,
+                        due_date
+                    )
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        reminder["order_id"],
+                        "dingtalk",
+                        reminder["event_key"],
+                        reminder["reminder_status"],
+                        reminder["due_date"]
+                    )
                 )
-            )
 
         connection.commit()
 
 
 @app.post("/api/notifications/dingtalk/run-daily")
 async def run_daily_dingtalk_reminders():
-    reminders = get_due_reminders(days_before=7)
+    reminders = get_combined_due_reminders(
+        days_before=7
+    )
     unsent_reminders = get_unsent_dingtalk_reminders(reminders)
 
     if not unsent_reminders:
@@ -1213,3 +1694,252 @@ def get_scheduler_status():
             else None
         )
     }
+
+
+@app.get("/api/export/ledger.xlsx")
+def export_ledger_excel():
+    order_result = list_orders()
+    invoice_result = list_invoices()
+
+    orders = order_result["items"]
+    invoices = invoice_result["items"]
+
+    workbook = Workbook()
+
+    # 工作表一：订单发票总表
+    order_sheet = workbook.active
+    order_sheet.title = "订单发票总表"
+
+    order_sheet.append([
+        "订单类型",
+        "订单号",
+        "合同号",
+        "往来单位",
+        "订单日期",
+        "交付日期",
+        "订单金额",
+        "预付款金额",
+        "累计收付款",
+        "剩余金额",
+        "到期日",
+        "收付款状态",
+        "开票状态",
+        "关联发票",
+        "结算方式",
+        "付款账期",
+        "负责人",
+        "复核状态"
+    ])
+
+    for order in orders:
+        order_sheet.append([
+            order["order_type"],
+            order["order_number"],
+            order["contract_number"],
+            order["counterparty_name"],
+            parse_excel_date(order["order_date"]),
+            parse_excel_date(order["delivery_date"]),
+            float(order["order_amount"] or 0),
+            float(order["prepayment_amount"] or 0),
+            float(order["paid_amount"] or 0),
+            None,
+            parse_excel_date(order["due_date"]),
+            order["payment_status"],
+            order["invoice_status"],
+            "、".join(order["invoice_numbers"] or []),
+            order["settlement_method"],
+            order["payment_terms"],
+            order["owner"],
+            order["review_status"]
+        ])
+
+        row_number = order_sheet.max_row
+
+        # 剩余金额 = 订单金额 - 累计收付款
+        order_sheet.cell(
+            row=row_number,
+            column=10,
+            value=f"=MAX(0,G{row_number}-I{row_number})"
+        )
+
+    style_export_sheet(
+        order_sheet,
+        [
+            12, 20, 20, 28, 13, 13,
+            15, 15, 15, 15, 13, 14,
+            14, 30, 20, 32, 14, 14
+        ]
+    )
+
+    for row_number in range(
+        2,
+        order_sheet.max_row + 1
+    ):
+        for column in (7, 8, 9, 10):
+            order_sheet.cell(
+                row=row_number,
+                column=column
+            ).number_format = "#,##0.00"
+
+        for column in (5, 6, 11):
+            order_sheet.cell(
+                row=row_number,
+                column=column
+            ).number_format = "yyyy-mm-dd"
+
+    # 工作表二：发票明细
+    invoice_sheet = workbook.create_sheet(
+        "发票明细"
+    )
+
+    invoice_sheet.append([
+        "发票类型",
+        "发票号码",
+        "开票日期",
+        "购买方",
+        "销售方",
+        "未税金额",
+        "税额",
+        "价税合计",
+        "预付款金额",
+        "累计收付款",
+        "剩余金额",
+        "到期日",
+        "收付款状态",
+        "关联订单",
+        "负责人",
+        "复核状态",
+        "来源文件"
+    ])
+
+    for invoice in invoices:
+        invoice_sheet.append([
+            invoice["document_type"],
+            invoice["invoice_number"],
+            parse_excel_date(invoice["invoice_date"]),
+            invoice["buyer_name"],
+            invoice["seller_name"],
+            float(invoice["amount_excl_tax"] or 0),
+            float(invoice["tax_amount"] or 0),
+            float(invoice["amount_incl_tax"] or 0),
+            float(invoice["prepayment_amount"] or 0),
+            float(invoice["paid_amount"] or 0),
+            None,
+            parse_excel_date(invoice["due_date"]),
+            invoice["payment_status"],
+            "、".join(invoice["order_numbers"] or []),
+            invoice["owner"],
+            invoice["review_status"],
+            invoice["source_filename"]
+        ])
+
+        row_number = invoice_sheet.max_row
+
+        # 剩余金额 = 价税合计 - 累计收付款
+        invoice_sheet.cell(
+            row=row_number,
+            column=11,
+            value=f"=MAX(0,H{row_number}-J{row_number})"
+        )
+
+    style_export_sheet(
+        invoice_sheet,
+        [
+            12, 24, 13, 30, 30, 15,
+            15, 15, 15, 15, 15, 13,
+            14, 32, 14, 14, 30
+        ]
+    )
+
+    for row_number in range(
+        2,
+        invoice_sheet.max_row + 1
+    ):
+        for column in (6, 7, 8, 9, 10, 11):
+            invoice_sheet.cell(
+                row=row_number,
+                column=column
+            ).number_format = "#,##0.00"
+
+        for column in (3, 12):
+            invoice_sheet.cell(
+                row=row_number,
+                column=column
+            ).number_format = "yyyy-mm-dd"
+
+    output = BytesIO()
+    workbook.save(output)
+    output.seek(0)
+
+    filename = (
+        "supply_chain_ledger_"
+        f"{date.today().strftime('%Y%m%d')}.xlsx"
+    )
+
+    return StreamingResponse(
+        output,
+        media_type=(
+            "application/vnd.openxmlformats-"
+            "officedocument.spreadsheetml.sheet"
+        ),
+        headers={
+            "Content-Disposition": (
+                f'attachment; filename="{filename}"'
+            )
+        }
+    )
+
+def parse_excel_date(value):
+    if not value:
+        return None
+
+    try:
+        return date.fromisoformat(value)
+    except (TypeError, ValueError):
+        return value
+
+
+def style_export_sheet(
+    worksheet,
+    column_widths: list[int]
+):
+    worksheet.freeze_panes = "A2"
+    worksheet.auto_filter.ref = worksheet.dimensions
+    worksheet.sheet_view.showGridLines = False
+
+    header_fill = PatternFill(
+        fill_type="solid",
+        fgColor="2563EB"
+    )
+
+    for cell in worksheet[1]:
+        cell.font = Font(
+            bold=True,
+            color="FFFFFF"
+        )
+        cell.fill = header_fill
+        cell.alignment = Alignment(
+            horizontal="center",
+            vertical="center",
+            wrap_text=True
+        )
+
+    worksheet.row_dimensions[1].height = 28
+
+    for column_index, width in enumerate(
+        column_widths,
+        start=1
+    ):
+        column_letter = get_column_letter(
+            column_index
+        )
+        worksheet.column_dimensions[
+            column_letter
+        ].width = width
+
+    for row in worksheet.iter_rows(min_row=2):
+        for cell in row:
+            cell.alignment = Alignment(
+                vertical="top",
+                wrap_text=True
+            )

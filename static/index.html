@@ -258,6 +258,12 @@
       font-size: 13px;
     }
 
+    .reminder-summary {
+      display: inline-block;
+      margin-left: 6px;
+      color: var(--warning);
+    }
+
     .reminder-header select {
       min-width: 100px;
     }
@@ -283,6 +289,13 @@
       display: block;
       margin-bottom: 3px;
     }
+
+    .reminder-link {
+      color: var(--primary);
+      text-decoration: none;
+    }
+
+    .reminder-link:hover { text-decoration: underline; }
 
     .reminder-amount {
       font-weight: 700;
@@ -318,6 +331,7 @@
       <div class="header-actions">
         <a class="button-link" href="/static/orders.html">订单台账</a>
         <a class="button-link" href="/static/entry.html">智能录入发票</a>
+        <a class="button-link" href="/api/export/ledger.xlsx">导出 Excel</a>
         <button id="refresh-button">刷新台账</button>
       </div>
     </header>
@@ -384,8 +398,11 @@
     <section class="reminder-card">
       <div class="reminder-header">
         <div>
-          <h2>账期预警</h2>
-          <p>仅展示未结清的已逾期、今日到期和即将到期单据。</p>
+          <h2>统一账期预警</h2>
+          <p>
+            同时展示订单与发票；已关联的同一笔业务优先保留发票提醒。
+            <span id="reminder-summary" class="reminder-summary"></span>
+          </p>
         </div>
 
         <label>
@@ -435,7 +452,8 @@
     const state = {
       invoices: [],
       filteredInvoices: [],
-      reminders: []
+      reminders: [],
+      reminderMeta: {}
     };
 
     const currencyFormatter = new Intl.NumberFormat("zh-CN", {
@@ -558,7 +576,9 @@
 
       body.innerHTML = state.filteredInvoices.map((invoice) => {
         const outstanding = getOutstandingAmount(invoice);
-        const orderNumbers = (invoice.order_numbers || []).join("<br>");
+        const orderNumbers = (invoice.order_numbers || [])
+          .map(escapeHtml)
+          .join("<br>");
 
         return `
           <tr>
@@ -612,6 +632,14 @@
 
     function renderReminders() {
       const container = document.getElementById("reminder-list");
+      const summary = document.getElementById("reminder-summary");
+      const suppressed = Number(
+        state.reminderMeta.suppressed_duplicate_total || 0
+      );
+
+      summary.textContent = suppressed > 0
+        ? `本次已合并 ${suppressed} 条重复提醒。`
+        : "本次没有重复提醒。";
 
       if (state.reminders.length === 0) {
         container.innerHTML = `
@@ -622,29 +650,59 @@
         return;
       }
 
-      container.innerHTML = state.reminders.map((item) => `
-        <article class="reminder-item">
-          <div>
-            <span class="tag ${getReminderClass(item.reminder_status)}">
-              ${escapeHtml(item.reminder_status)}
-            </span>
-          </div>
+      container.innerHTML = state.reminders.map((item) => {
+        const isInvoice = item.source_type === "invoice";
+        const documentType = isInvoice
+          ? item.document_type
+          : item.order_type;
+        const documentNumber = isInvoice
+          ? item.invoice_number
+          : item.order_number;
+        const editUrl = isInvoice
+          ? `/static/edit.html?id=${encodeURIComponent(item.invoice_id)}`
+          : `/static/order-edit.html?id=${encodeURIComponent(item.order_id)}`;
+        const amountLabel = ["销售发票", "销售订单"].includes(documentType)
+          ? "待收款"
+          : "待付款";
+        const timeText = item.days_to_due < 0
+          ? `已逾期 ${Math.abs(item.days_to_due)} 天`
+          : item.days_to_due === 0
+            ? "今日到期"
+            : `剩余 ${item.days_to_due} 天`;
+        const relatedOrders = isInvoice && (item.order_numbers || []).length
+          ? `｜关联订单：${item.order_numbers.map(escapeHtml).join("、")}`
+          : "";
 
-          <div>
-            <strong>${escapeHtml(item.invoice_number)}</strong>
-            <div>${escapeHtml(item.counterparty || "-")}</div>
-            <div class="muted">
-              到期日：${escapeHtml(item.due_date)}
-              ｜剩余 ${item.days_to_due} 天
-              ｜负责人：${escapeHtml(item.owner || "待分配")}
+        return `
+          <article class="reminder-item">
+            <div>
+              <span class="tag ${getReminderClass(item.reminder_status)}">
+                ${escapeHtml(item.reminder_status)}
+              </span>
+              <div class="muted">${escapeHtml(documentType)}</div>
             </div>
-          </div>
 
-          <div class="reminder-amount">
-            待收付：${formatMoney(item.amount_due)}
-          </div>
-        </article>
-      `).join("");
+            <div>
+              <strong>
+                <a class="reminder-link" href="${editUrl}">
+                  ${escapeHtml(documentNumber)}
+                </a>
+              </strong>
+              <div>${escapeHtml(item.counterparty || "-")}</div>
+              <div class="muted">
+                到期日：${escapeHtml(item.due_date)}
+                ｜${escapeHtml(timeText)}
+                ｜负责人：${escapeHtml(item.owner || "待分配")}
+                ${relatedOrders}
+              </div>
+            </div>
+
+            <div class="reminder-amount">
+              ${escapeHtml(amountLabel)}：${formatMoney(item.amount_due)}
+            </div>
+          </article>
+        `;
+      }).join("");
     }
 
     function renderDashboard() {
@@ -664,7 +722,7 @@
       try {
         const [invoiceResponse, reminderResponse] = await Promise.all([
           fetch("/api/invoices"),
-          fetch(`/api/reminders/due?days_before=${reminderDays}`)
+          fetch(`/api/reminders/all/due?days_before=${reminderDays}`)
         ]);
 
         if (!invoiceResponse.ok) {
@@ -680,6 +738,7 @@
 
         state.invoices = invoiceResult.items || [];
         state.reminders = reminderResult.items || [];
+        state.reminderMeta = reminderResult;
 
         applyFilters();
         renderReminders();
@@ -689,6 +748,7 @@
         state.invoices = [];
         state.filteredInvoices = [];
         state.reminders = [];
+        state.reminderMeta = {};
 
         renderDashboard();
         renderReminders();

@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>更新订单台账</title>
+
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --border: #e5e7eb;
+      --success: #15803d;
+      --danger: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    .page {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+    }
+
+    .back {
+      color: var(--primary);
+      text-decoration: none;
+      font-size: 14px;
+    }
+
+    h1 {
+      margin: 18px 0 6px;
+      font-size: 26px;
+    }
+
+    .subtitle {
+      margin: 0 0 20px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .card {
+      margin-bottom: 16px;
+      padding: 20px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--card);
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .summary-value {
+      margin-top: 5px;
+      font-size: 15px;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .span-all { grid-column: 1 / -1; }
+
+    label {
+      display: grid;
+      gap: 6px;
+      color: #374151;
+      font-size: 13px;
+    }
+
+    input, select, textarea, button { font: inherit; }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 9px 10px;
+      border: 1px solid #d1d5db;
+      border-radius: 7px;
+      background: white;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #93c5fd;
+      outline: 3px solid #dbeafe;
+    }
+
+    textarea {
+      min-height: 90px;
+      resize: vertical;
+    }
+
+    button {
+      margin-top: 16px;
+      padding: 10px 18px;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      cursor: pointer;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .message {
+      min-height: 20px;
+      margin-top: 12px;
+      font-size: 14px;
+    }
+
+    .success { color: var(--success); }
+    .error { color: var(--danger); }
+    .hidden { display: none; }
+
+    @media (max-width: 650px) {
+      .summary,
+      .form-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <main class="page">
+    <a class="back" href="/static/orders.html">← 返回订单台账</a>
+
+    <h1>更新订单台账</h1>
+    <p class="subtitle">修正识别结果，并维护账期、收付款进度、负责人和复核状态。</p>
+
+    <div id="loading-message" class="card">正在加载订单数据……</div>
+
+    <div id="content" class="hidden">
+      <section class="card">
+        <div class="summary">
+          <div>
+            <div class="summary-label">订单号</div>
+            <div id="summary-order-number" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">订单类型</div>
+            <div id="summary-order-type" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">当前收付款状态</div>
+            <div id="summary-payment-status" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">往来单位</div>
+            <div id="summary-counterparty" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">订单金额</div>
+            <div id="summary-order-amount" class="summary-value">-</div>
+          </div>
+
+          <div>
+            <div class="summary-label">开票状态</div>
+            <div id="summary-invoice-status" class="summary-value">-</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="form-grid">
+          <label>
+            合同号
+            <input id="contract-number">
+          </label>
+
+          <label>
+            往来单位
+            <input id="counterparty-name">
+          </label>
+
+          <label>
+            订单日期
+            <input id="order-date" type="date">
+          </label>
+
+          <label>
+            交付日期
+            <input id="delivery-date" type="date">
+          </label>
+
+          <label>
+            订单金额
+            <input id="order-amount" type="number" min="0.01" step="0.01">
+          </label>
+
+          <label>
+            到期日
+            <input id="due-date" type="date">
+          </label>
+
+          <label>
+            预付款金额
+            <input id="prepayment-amount" type="number" min="0" step="0.01">
+          </label>
+
+          <label>
+            累计收付款金额
+            <input id="paid-amount" type="number" min="0" step="0.01">
+            <span class="hint">累计金额需要包含预付款。</span>
+          </label>
+
+          <label>
+            负责人
+            <input id="owner">
+          </label>
+
+          <label>
+            复核状态
+            <select id="review-status">
+              <option value="待人工确认">待人工确认</option>
+              <option value="已确认">已确认</option>
+              <option value="需人工复核">需人工复核</option>
+            </select>
+          </label>
+
+          <label class="span-all">
+            结算方式
+            <input id="settlement-method" placeholder="例如：银行转账">
+          </label>
+
+          <label class="span-all">
+            付款账期说明
+            <textarea id="payment-terms"></textarea>
+          </label>
+
+          <label class="span-all">
+            复核备注（每行一条）
+            <textarea id="review-notes"></textarea>
+          </label>
+        </div>
+
+        <button id="save-button" type="button">保存更新</button>
+        <div id="save-message" class="message" aria-live="polite"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const state = {
+      orderId: null,
+      order: null
+    };
+
+    const moneyFormatter = new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 2
+    });
+
+    function getOrderId() {
+      const params = new URLSearchParams(window.location.search);
+      return Number(params.get("id"));
+    }
+
+    function setMessage(message, type = "") {
+      const element = document.getElementById("save-message");
+      element.textContent = message;
+      element.className = `message ${type}`;
+    }
+
+    function numberValue(id) {
+      const value = document.getElementById(id).value;
+      return value === "" ? 0 : Number(value);
+    }
+
+    function nullableValue(id) {
+      const value = document.getElementById(id).value.trim();
+      return value || null;
+    }
+
+    function splitNotes(value) {
+      return value
+        .split("\n")
+        .map((item) => item.trim())
+        .filter(Boolean);
+    }
+
+    function renderOrder(order) {
+      document.getElementById("summary-order-number").textContent =
+        order.order_number || "-";
+      document.getElementById("summary-order-type").textContent =
+        order.order_type || "-";
+      document.getElementById("summary-payment-status").textContent =
+        order.payment_status || "-";
+      document.getElementById("summary-counterparty").textContent =
+        order.counterparty_name || "-";
+      document.getElementById("summary-order-amount").textContent =
+        moneyFormatter.format(Number(order.order_amount || 0));
+      document.getElementById("summary-invoice-status").textContent =
+        order.invoice_status || "-";
+
+      document.getElementById("contract-number").value =
+        order.contract_number || "";
+      document.getElementById("counterparty-name").value =
+        order.counterparty_name || "";
+      document.getElementById("order-date").value =
+        order.order_date || "";
+      document.getElementById("delivery-date").value =
+        order.delivery_date || "";
+      document.getElementById("order-amount").value =
+        Number(order.order_amount || 0);
+      document.getElementById("due-date").value =
+        order.due_date || "";
+      document.getElementById("prepayment-amount").value =
+        Number(order.prepayment_amount || 0);
+      document.getElementById("paid-amount").value =
+        Number(order.paid_amount || 0);
+      document.getElementById("owner").value =
+        order.owner || "";
+      document.getElementById("review-status").value =
+        order.review_status || "待人工确认";
+      document.getElementById("settlement-method").value =
+        order.settlement_method || "";
+      document.getElementById("payment-terms").value =
+        order.payment_terms || "";
+      document.getElementById("review-notes").value =
+        (order.review_notes || []).join("\n");
+    }
+
+    async function loadOrder() {
+      state.orderId = getOrderId();
+
+      if (!state.orderId) {
+        document.getElementById("loading-message").textContent =
+          "缺少有效的订单编号。";
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/orders");
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error("读取订单台账失败。");
+        }
+
+        state.order = (result.items || []).find(
+          (item) => Number(item.id) === state.orderId
+        );
+
+        if (!state.order) {
+          throw new Error("未找到该订单台账。");
+        }
+
+        renderOrder(state.order);
+        document.getElementById("loading-message").classList.add("hidden");
+        document.getElementById("content").classList.remove("hidden");
+      } catch (error) {
+        document.getElementById("loading-message").textContent = error.message;
+      }
+    }
+
+    document.getElementById("save-button").addEventListener("click", async () => {
+      const orderAmount = numberValue("order-amount");
+      const prepaymentAmount = numberValue("prepayment-amount");
+      const paidAmount = numberValue("paid-amount");
+      const button = document.getElementById("save-button");
+
+      if (orderAmount <= 0) {
+        setMessage("订单金额必须大于 0。", "error");
+        return;
+      }
+
+      if (paidAmount > orderAmount) {
+        setMessage("累计收付款金额不能大于订单金额。", "error");
+        return;
+      }
+
+      if (prepaymentAmount > paidAmount) {
+        setMessage("预付款不能大于累计收付款金额。", "error");
+        return;
+      }
+
+      const payload = {
+        contract_number: nullableValue("contract-number"),
+        counterparty_name: nullableValue("counterparty-name"),
+        order_date: document.getElementById("order-date").value || null,
+        delivery_date: document.getElementById("delivery-date").value || null,
+        order_amount: orderAmount,
+        due_date: document.getElementById("due-date").value || null,
+        prepayment_amount: prepaymentAmount,
+        paid_amount: paidAmount,
+        owner: nullableValue("owner"),
+        review_status: document.getElementById("review-status").value,
+        settlement_method: nullableValue("settlement-method"),
+        payment_terms: nullableValue("payment-terms"),
+        review_notes: splitNotes(
+          document.getElementById("review-notes").value
+        )
+      };
+
+      button.disabled = true;
+      setMessage("正在保存……");
+
+      try {
+        const response = await fetch(
+          `/api/orders/${state.orderId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload)
+          }
+        );
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          const detail = typeof result.detail === "string"
+            ? result.detail
+            : JSON.stringify(result.detail);
+          throw new Error(detail);
+        }
+
+        state.order = {
+          ...state.order,
+          ...payload,
+          payment_status: result.payment_status
+        };
+
+        document.getElementById("summary-payment-status").textContent =
+          result.payment_status;
+        document.getElementById("summary-counterparty").textContent =
+          payload.counterparty_name || "-";
+        document.getElementById("summary-order-amount").textContent =
+          moneyFormatter.format(orderAmount);
+
+        setMessage(
+          `保存成功，当前状态：${result.payment_status}`,
+          "success"
+        );
+      } catch (error) {
+        setMessage(`保存失败：${error.message}`, "error");
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    loadOrder();
+  </script>
+</body>
+</html>

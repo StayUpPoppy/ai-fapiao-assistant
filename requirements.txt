@@ -4,3 +4,4 @@ httpx
 python-dotenv
 python-multipart
 APScheduler==3.11.3
+openpyxl
