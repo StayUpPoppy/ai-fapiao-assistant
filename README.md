@@ -1,17 +1,16 @@
-# 发票台账助手
+# 供应链订单与发票台账助手
 
 ## 功能介绍
 
-- 上传销售发票或采购发票的 PDF、图片文件。
-- 调用 Dify 工作流识别发票号码、开票日期、购销双方、金额、订单号和商品明细。
-- 自动校验未税金额、税额与价税合计，并标记需要人工复核的内容。
-- 由业务人员补充账期、预付款、累计收付款金额、负责人和复核状态。
-- 使用 SQLite 保存发票台账，并阻止同一发票号码重复入账。
-- 支持一张发票关联多个订单，同一张发票内的重复订单号会自动去重。
-- 支持按单据类型、收付款状态、发票号、往来单位和订单号查询台账。
+- 上传销售发票、采购发票以及销售订单、采购订单，调用 Dify Workflow 提取单据编号、日期、往来单位、金额、结算方式和关联订单等信息。
+- 对金额、日期和必填字段进行自动校验，标记缺失内容及异常信息，并由业务人员人工确认后保存。
+- 使用 SQLite 保存订单、发票、账期、预付款、累计收付款、负责人和复核状态。
+- 根据订单号自动关联同方向的订单与发票，并避免同一订单号或发票号重复入账。
 - 自动计算未收款、部分收款、已收款、未付款、部分付款和已付款状态。
-- 根据到期日生成即将到期、今日到期和已逾期提醒。
-- 支持通过钉钉自定义机器人发送账期提醒。
+- 在首页统一展示订单与发票账期预警，对已关联的同一笔业务合并重复提醒。
+- 通过钉钉自定义机器人发送即将到期、今日到期和逾期提醒，并记录发送结果以避免重复通知。
+- 支持订单与发票台账查询、人工更新以及统一 Excel 台账导出。
+- 使用带签名和有效期的 HttpOnly Cookie 保护业务页面、API、Swagger 文档及 Excel 下载。
 
 ## 启动程序
 
@@ -28,34 +27,44 @@
    .\.venv\Scripts\python.exe -m pip install -r requirements.txt
    ```
 
-3. 在项目根目录创建 `.env`，填写以下配置：
+3. 在项目根目录创建 `.env`，填写运行配置：
 
    ```env
-   DIFY_API_BASE_URL=http://127.0.0.1:18082/v1
-   DIFY_API_KEY=填写Dify应用API密钥
+   DIFY_API_BASE_URL=http://114.66.41.184:18082/v1
+   DIFY_API_KEY=填写发票Workflow的API密钥
+   DIFY_ORDER_API_KEY=填写订单Workflow的API密钥
    DIFY_USER=invoice-ledger-local
 
    DINGTALK_WEBHOOK=填写钉钉机器人Webhook地址
    DINGTALK_SECRET=填写钉钉机器人加签密钥
+   REMINDER_HOUR=9
+   REMINDER_MINUTE=0
+
+   APP_USERNAME=manager
+   APP_PASSWORD="填写至少8位的强密码"
+   APP_SESSION_SECRET=填写至少32位的随机会话密钥
+   APP_SESSION_HOURS=12
+   APP_COOKIE_SECURE=false
    ```
 
-4. 如果 Dify 部署在远程服务器，另开一个 PowerShell 窗口并建立 SSH 隧道：
+   生成随机会话密钥：
 
    ```powershell
-   ssh -N -L 18082:127.0.0.1:18082 <服务器用户名>@<服务器地址>
+   .\.venv\Scripts\python.exe -c "import secrets; print(secrets.token_urlsafe(48))"
    ```
 
-   运行程序期间需要保持这个 SSH 窗口开启。
+   本地 HTTP 运行时使用 `APP_COOKIE_SECURE=false`；通过 HTTPS 部署后改为 `APP_COOKIE_SECURE=true`。
 
-5. 启动 FastAPI：
+4. 启动 FastAPI：
 
    ```powershell
    .\.venv\Scripts\python.exe -m uvicorn main:app --reload
    ```
 
-6. 浏览器访问：
+5. 浏览器访问：
 
    ```text
+   登录页面：http://127.0.0.1:8000/login
    业务页面：http://127.0.0.1:8000/
-   API 文档：http://127.0.0.1:8000/docs
+   API文档：http://127.0.0.1:8000/docs
    ```

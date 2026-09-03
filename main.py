@@ -1,15 +1,30 @@
 import os
 import json
 import sqlite3
+import binascii
+import secrets
 from contextlib import asynccontextmanager, closing
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from pathlib import Path
 import httpx
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile
+)
 from typing import Any, Literal
 from pydantic import BaseModel, Field
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    JSONResponse,
+    RedirectResponse,
+    StreamingResponse
+)
 from datetime import date
 from io import BytesIO
 from openpyxl import Workbook
@@ -20,7 +35,7 @@ import base64
 import hashlib
 import hmac
 import time
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 load_dotenv()
 
@@ -79,6 +94,18 @@ DATA_DIR = Path("data")
 DB_PATH = DATA_DIR / "invoice_ledger.db"
 DINGTALK_WEBHOOK = os.getenv("DINGTALK_WEBHOOK", "").strip()
 DINGTALK_SECRET = os.getenv("DINGTALK_SECRET", "").strip()
+APP_USERNAME = os.getenv("APP_USERNAME", "").strip()
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+APP_SESSION_SECRET = os.getenv("APP_SESSION_SECRET", "")
+APP_SESSION_HOURS = max(
+    1,
+    int(os.getenv("APP_SESSION_HOURS", "12"))
+)
+APP_COOKIE_SECURE = (
+    os.getenv("APP_COOKIE_SECURE", "false").lower()
+    == "true"
+)
+SESSION_COOKIE_NAME = "ledger_session"
 
 
 def get_db_connection():
@@ -254,6 +281,236 @@ class OrderUpdate(BaseModel):
     ] | None = None
 
     review_notes: list[str] | None = None
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+def encode_session_payload(data: dict) -> str:
+    content = json.dumps(
+        data,
+        ensure_ascii=False,
+        separators=(",", ":")
+    ).encode("utf-8")
+
+    return (
+        base64.urlsafe_b64encode(content)
+        .rstrip(b"=")
+        .decode("ascii")
+    )
+
+
+def decode_session_payload(value: str) -> dict:
+    padding = "=" * (-len(value) % 4)
+    content = base64.urlsafe_b64decode(
+        value + padding
+    )
+    return json.loads(content.decode("utf-8"))
+
+
+def create_session_token(username: str) -> str:
+    payload = encode_session_payload({
+        "username": username,
+        "expires_at": (
+            int(time.time())
+            + APP_SESSION_HOURS * 3600
+        )
+    })
+
+    signature = hmac.new(
+        APP_SESSION_SECRET.encode("utf-8"),
+        payload.encode("ascii"),
+        hashlib.sha256
+    ).hexdigest()
+
+    return f"{payload}.{signature}"
+
+
+def verify_session_token(
+    token: str | None
+) -> str | None:
+    if not token or not APP_SESSION_SECRET:
+        return None
+
+    try:
+        payload, signature = token.split(
+            ".",
+            maxsplit=1
+        )
+
+        expected_signature = hmac.new(
+            APP_SESSION_SECRET.encode("utf-8"),
+            payload.encode("ascii"),
+            hashlib.sha256
+        ).hexdigest()
+
+        if not secrets.compare_digest(
+            signature,
+            expected_signature
+        ):
+            return None
+
+        session_data = decode_session_payload(
+            payload
+        )
+
+        if int(
+            session_data.get("expires_at", 0)
+        ) < int(time.time()):
+            return None
+
+        username = session_data.get("username")
+
+        if not isinstance(username, str):
+            return None
+
+        if not secrets.compare_digest(
+            username.encode("utf-8"),
+            APP_USERNAME.encode("utf-8")
+        ):
+            return None
+
+        return username
+
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        UnicodeDecodeError,
+        binascii.Error
+    ):
+        return None
+
+
+def auth_is_configured() -> bool:
+    return (
+        bool(APP_USERNAME)
+        and len(APP_PASSWORD) >= 8
+        and len(APP_SESSION_SECRET) >= 32
+    )
+
+
+@app.middleware("http")
+async def require_login(
+    request: Request,
+    call_next
+):
+    public_paths = {
+        "/login",
+        "/api/auth/login"
+    }
+
+    if request.url.path in public_paths:
+        return await call_next(request)
+
+    username = verify_session_token(
+        request.cookies.get(SESSION_COOKIE_NAME)
+    )
+
+    if username:
+        request.state.username = username
+        return await call_next(request)
+
+    if request.url.path.startswith("/api/"):
+        return JSONResponse(
+            status_code=401,
+            content={
+                "detail": "未登录或登录已过期。"
+            }
+        )
+
+    next_url = request.url.path
+
+    if request.url.query:
+        next_url += f"?{request.url.query}"
+
+    return RedirectResponse(
+        url=f"/login?next={quote(next_url, safe='')}",
+        status_code=303
+    )
+
+
+@app.get("/login", include_in_schema=False)
+def login_page(request: Request):
+    username = verify_session_token(
+        request.cookies.get(SESSION_COOKIE_NAME)
+    )
+
+    if username:
+        return RedirectResponse(
+            url="/",
+            status_code=303
+        )
+
+    return FileResponse(STATIC_DIR / "login.html")
+
+
+@app.post("/api/auth/login")
+def login(
+    credentials: LoginRequest,
+    response: Response
+):
+    if not auth_is_configured():
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "登录认证配置无效：密码至少8位，"
+                "会话密钥至少32位。"
+            )
+        )
+
+    username_correct = secrets.compare_digest(
+        credentials.username.encode("utf-8"),
+        APP_USERNAME.encode("utf-8")
+    )
+
+    password_correct = secrets.compare_digest(
+        credentials.password.encode("utf-8"),
+        APP_PASSWORD.encode("utf-8")
+    )
+
+    if not username_correct or not password_correct:
+        raise HTTPException(
+            status_code=401,
+            detail="用户名或密码错误。"
+        )
+
+    max_age = APP_SESSION_HOURS * 3600
+
+    response.set_cookie(
+        key=SESSION_COOKIE_NAME,
+        value=create_session_token(
+            credentials.username
+        ),
+        max_age=max_age,
+        httponly=True,
+        secure=APP_COOKIE_SECURE,
+        samesite="lax",
+        path="/"
+    )
+
+    return {
+        "status": "ok",
+        "username": credentials.username,
+        "expires_in": max_age
+    }
+
+
+@app.post("/api/auth/logout")
+def logout(response: Response):
+    response.delete_cookie(
+        key=SESSION_COOKIE_NAME,
+        path="/"
+    )
+
+    return {
+        "status": "ok",
+        "message": "已退出登录。"
+    }
+
+
 @app.get("/", include_in_schema=False)
 def home():
     return FileResponse(STATIC_DIR / "index.html")

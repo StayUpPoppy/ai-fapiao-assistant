@@ -367,6 +367,7 @@
         <a class="button-link" href="/">发票台账</a>
         <a class="button-link" href="/api/export/ledger.xlsx">导出 Excel</a>
         <button id="create-button">新增订单</button>
+        <button id="logout-button" type="button">退出登录</button>
         <button id="refresh-button">刷新台账</button>
       </div>
     </header>
@@ -1000,6 +1001,10 @@
     });
 
     document.getElementById("refresh-button").addEventListener("click", loadOrders);
+    document.getElementById("logout-button").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
     document.getElementById("type-filter").addEventListener("change", applyFilters);
     document.getElementById("invoice-filter").addEventListener("change", applyFilters);
     document.getElementById("keyword-filter").addEventListener("input", applyFilters);

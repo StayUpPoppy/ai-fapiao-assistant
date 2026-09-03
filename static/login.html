@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登录｜供应链台账助手</title>
+
+  <style>
+    :root {
+      --bg: #eef3f9;
+      --card: #ffffff;
+      --text: #172033;
+      --muted: #6b7280;
+      --primary: #2563eb;
+      --border: #dbe3ef;
+      --danger: #dc2626;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, #dbeafe 0, transparent 34%),
+        var(--bg);
+      font-family: "Microsoft YaHei", system-ui, sans-serif;
+    }
+
+    .login-card {
+      width: min(420px, 100%);
+      padding: 34px;
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--card);
+      box-shadow: 0 24px 60px rgba(30, 64, 175, 0.12);
+    }
+
+    .brand {
+      display: inline-flex;
+      width: 44px;
+      height: 44px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: white;
+      border-radius: 12px;
+      background: var(--primary);
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+    }
+
+    .subtitle {
+      margin: 8px 0 24px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    form { display: grid; gap: 16px; }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: #374151;
+      font-size: 14px;
+    }
+
+    input, button { font: inherit; }
+
+    input {
+      width: 100%;
+      padding: 11px 12px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      background: white;
+    }
+
+    input:focus {
+      border-color: #60a5fa;
+      outline: 3px solid #dbeafe;
+    }
+
+    button {
+      margin-top: 4px;
+      padding: 11px 16px;
+      color: white;
+      border: 0;
+      border-radius: 8px;
+      background: var(--primary);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    button:hover { background: #1d4ed8; }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.65;
+    }
+
+    .message {
+      min-height: 20px;
+      margin-top: 14px;
+      color: var(--danger);
+      font-size: 13px;
+    }
+
+    .security-hint {
+      margin: 20px 0 0;
+      padding-top: 16px;
+      color: var(--muted);
+      border-top: 1px solid #eef2f7;
+      font-size: 12px;
+      line-height: 1.6;
+    }
+  </style>
+</head>
+
+<body>
+  <main class="login-card">
+    <div class="brand">AI</div>
+    <h1>供应链台账助手</h1>
+    <p class="subtitle">请输入内部账号，登录后管理订单、发票、账期及收付款信息。</p>
+
+    <form id="login-form">
+      <label>
+        用户名
+        <input id="username" autocomplete="username" required autofocus>
+      </label>
+
+      <label>
+        密码
+        <input id="password" type="password" autocomplete="current-password" required>
+      </label>
+
+      <button id="login-button" type="submit">登录</button>
+    </form>
+
+    <div id="message" class="message" aria-live="polite"></div>
+    <p class="security-hint">AI 识别结果仍需业务人员确认后保存，请勿与无关人员共享账号。</p>
+  </main>
+
+  <script>
+    const form = document.getElementById("login-form");
+    const button = document.getElementById("login-button");
+    const message = document.getElementById("message");
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      button.disabled = true;
+      message.textContent = "正在登录……";
+
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            username: document.getElementById("username").value.trim(),
+            password: document.getElementById("password").value
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.detail || "登录失败。");
+        }
+
+        const params = new URLSearchParams(window.location.search);
+        const next = params.get("next");
+        window.location.href = next && next.startsWith("/") && !next.startsWith("//")
+          ? next
+          : "/";
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
