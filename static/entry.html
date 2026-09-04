@@ -135,14 +135,23 @@
       .grid { grid-template-columns: 1fr; }
     }
   </style>
+  <link rel="stylesheet" href="/static/ui.css">
 </head>
 
-<body>
+<body data-page="entry">
   <main class="page">
     <a class="back" href="/">← 返回台账总览</a>
 
     <h1>智能录入发票</h1>
-    <p class="subtitle">AI 提取字段后，由业务人员复核并补充账期、收付款信息。</p>
+    <p class="subtitle">上传发票后由 AI 提取字段；确认关键数据并补齐账期信息，再保存到台账。</p>
+
+    <div class="entry-progress" aria-label="录入流程">
+      <div class="entry-progress-step is-current"><span class="entry-progress-index">1</span>上传识别</div>
+      <div class="entry-progress-step"><span class="entry-progress-index">2</span>人工复核</div>
+      <div class="entry-progress-step"><span class="entry-progress-index">3</span>保存台账</div>
+    </div>
+
+    <div class="entry-workspace">
 
     <section class="card">
       <h2>1. 上传并识别</h2>
@@ -261,8 +270,10 @@
 
       <div id="save-message" class="message"></div>
     </section>
+    </div>
   </main>
 
+  <script src="/static/ui.js"></script>
   <script>
     const state = {
       difyOutput: {}
@@ -296,6 +307,15 @@
         .split(/\n|,|，/)
         .map((item) => item.trim())
         .filter(Boolean);
+    }
+
+    function updateEntryProgress(currentStep) {
+      const steps = document.querySelectorAll(".entry-progress-step");
+
+      steps.forEach((step, index) => {
+        step.classList.toggle("is-current", index === currentStep);
+        step.classList.toggle("is-done", index < currentStep);
+      });
     }
 
     document.getElementById("recognize-button").addEventListener("click", async () => {
@@ -356,6 +376,7 @@
         );
 
         document.getElementById("review-section").classList.remove("hidden");
+        updateEntryProgress(1);
 
         const checkMessage = outputs.amount_check_passed
           ? "金额校验通过。请复核并补充账期信息。"
@@ -431,6 +452,7 @@
           `保存成功：台账编号 ${result.id}，当前状态为${result.payment_status}。`,
           "success"
         );
+        updateEntryProgress(2);
       } catch (error) {
         console.error(error);
         setMessage("save-message", `保存失败：${error.message}`, "error");

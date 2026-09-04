@@ -1,7 +1,12 @@
 import sqlite3
 from contextlib import closing
 
-from app.config import DB_PATH
+from app.config import (
+    DB_PATH,
+    ENABLE_SCHEDULER,
+    REMINDER_HOUR,
+    REMINDER_MINUTE,
+)
 
 
 def get_db_connection() -> sqlite3.Connection:
@@ -104,5 +109,37 @@ def init_database() -> None:
                 UNIQUE(order_id, channel, event_key)
             )
         """)
+        connection.execute("""
+            CREATE TABLE IF NOT EXISTS reminder_settings (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                enabled INTEGER NOT NULL DEFAULT 1
+                    CHECK (enabled IN (0, 1)),
+                reminder_hour INTEGER NOT NULL DEFAULT 9
+                    CHECK (reminder_hour BETWEEN 0 AND 23),
+                reminder_minute INTEGER NOT NULL DEFAULT 0
+                    CHECK (reminder_minute BETWEEN 0 AND 59),
+                days_before INTEGER NOT NULL DEFAULT 7
+                    CHECK (days_before BETWEEN 0 AND 365),
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO reminder_settings (
+                id,
+                enabled,
+                reminder_hour,
+                reminder_minute,
+                days_before
+            )
+            VALUES (1, ?, ?, ?, 7)
+            """,
+            (
+                int(ENABLE_SCHEDULER),
+                REMINDER_HOUR,
+                REMINDER_MINUTE,
+            )
+        )
 
         connection.commit()

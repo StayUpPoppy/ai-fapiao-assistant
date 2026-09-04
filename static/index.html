@@ -3,426 +3,148 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>发票台账助手</title>
-
-  <style>
-    :root {
-      --bg: #f4f7fb;
-      --card: #ffffff;
-      --text: #172033;
-      --muted: #6b7280;
-      --primary: #2563eb;
-      --border: #e5e7eb;
-      --success: #15803d;
-      --warning: #b45309;
-      --danger: #dc2626;
-    }
-
-    * { box-sizing: border-box; }
-
-    body {
-      margin: 0;
-      color: var(--text);
-      background: var(--bg);
-      font-family: "Microsoft YaHei", system-ui, sans-serif;
-    }
-
-    .header-actions {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-
-    .button-link {
-      padding: 10px 16px;
-      color: var(--primary);
-      border: 1px solid #bfdbfe;
-      border-radius: 8px;
-      background: #eff6ff;
-      text-decoration: none;
-    }
-
-    .page {
-      max-width: 1440px;
-      margin: 0 auto;
-      padding: 28px 20px 48px;
-    }
-
-    .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 16px;
-      margin-bottom: 20px;
-    }
-
-    h1 {
-      margin: 0;
-      font-size: 26px;
-    }
-
-    .subtitle {
-      margin: 7px 0 0;
-      color: var(--muted);
-      font-size: 14px;
-    }
-
-    button, select, input {
-      font: inherit;
-    }
-
-    button {
-      padding: 10px 16px;
-      color: white;
-      border: 0;
-      border-radius: 8px;
-      background: var(--primary);
-      cursor: pointer;
-    }
-
-    button:hover { background: #1d4ed8; }
-
-    .filters, .table-card, .kpi-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-
-    .filters {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      align-items: end;
-      padding: 16px;
-      margin-bottom: 16px;
-    }
-
-    .filter-item {
-      display: grid;
-      gap: 6px;
-    }
-
-    label {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    select, input {
-      min-width: 160px;
-      padding: 9px 10px;
-      border: 1px solid #d1d5db;
-      border-radius: 7px;
-      background: white;
-    }
-
-    .search-input { min-width: 260px; }
-
-    .kpis {
-      display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: 16px;
-      margin-bottom: 16px;
-    }
-
-    .kpi-card { padding: 18px; }
-
-    .kpi-label {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .kpi-value {
-      margin-top: 8px;
-      font-size: 26px;
-      font-weight: 700;
-    }
-
-    .kpi-hint {
-      margin-top: 5px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-
-    .table-card {
-      overflow: hidden;
-    }
-
-    .table-title {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 18px;
-      border-bottom: 1px solid var(--border);
-    }
-
-    .table-title h2 {
-      margin: 0;
-      font-size: 17px;
-    }
-
-    .status-message {
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .table-wrap { overflow-x: auto; }
-
-    table {
-      width: 100%;
-      min-width: 1080px;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      padding: 13px 14px;
-      text-align: left;
-      border-bottom: 1px solid var(--border);
-      vertical-align: top;
-    }
-
-    th {
-      color: var(--muted);
-      background: #f8fafc;
-      font-weight: 600;
-      white-space: nowrap;
-    }
-
-    tbody tr:hover { background: #f8fbff; }
-
-    .amount {
-      font-variant-numeric: tabular-nums;
-      white-space: nowrap;
-    }
-
-    .muted { color: var(--muted); }
-
-    .tag {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 999px;
-      font-size: 12px;
-      white-space: nowrap;
-    }
-
-    .tag-success { color: var(--success); background: #dcfce7; }
-    .tag-warning { color: var(--warning); background: #fef3c7; }
-    .tag-danger { color: var(--danger); background: #fee2e2; }
-    .tag-neutral { color: #475569; background: #e2e8f0; }
-
-    .empty {
-      padding: 42px;
-      color: var(--muted);
-      text-align: center;
-    }
-
-    .table-action {
-      display: inline-block;
-      padding: 6px 10px;
-      color: var(--primary);
-      border: 1px solid #bfdbfe;
-      border-radius: 6px;
-      background: #eff6ff;
-      text-decoration: none;
-      white-space: nowrap;
-    }
-
-    .table-action:hover {
-      background: #dbeafe;
-    }
-
-    .reminder-card {
-      margin-bottom: 16px;
-      padding: 18px;
-      border: 1px solid #fed7aa;
-      border-radius: 12px;
-      background: #fffaf5;
-    }
-
-    .reminder-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 12px;
-    }
-
-    .reminder-header h2 {
-      margin: 0;
-      font-size: 17px;
-    }
-
-    .reminder-header p {
-      margin: 5px 0 0;
-      color: var(--muted);
-      font-size: 13px;
-    }
-
-    .reminder-summary {
-      display: inline-block;
-      margin-left: 6px;
-      color: var(--warning);
-    }
-
-    .reminder-header select {
-      min-width: 100px;
-    }
-
-    .reminder-list {
-      display: grid;
-      gap: 10px;
-    }
-
-    .reminder-item {
-      display: grid;
-      grid-template-columns: 110px 1fr auto;
-      gap: 14px;
-      align-items: center;
-      padding: 12px;
-      border: 1px solid #fde68a;
-      border-radius: 8px;
-      background: white;
-      font-size: 13px;
-    }
-
-    .reminder-item strong {
-      display: block;
-      margin-bottom: 3px;
-    }
-
-    .reminder-link {
-      color: var(--primary);
-      text-decoration: none;
-    }
-
-    .reminder-link:hover { text-decoration: underline; }
-
-    .reminder-amount {
-      font-weight: 700;
-      white-space: nowrap;
-    }
-
-    @media (max-width: 700px) {
-      .reminder-item {
-        grid-template-columns: 1fr;
-        gap: 6px;
-      }
-    }
-
-    @media (max-width: 900px) {
-      .kpis { grid-template-columns: repeat(2, 1fr); }
-    }
-
-    @media (max-width: 620px) {
-      .header { align-items: flex-start; flex-direction: column; }
-      .kpis { grid-template-columns: 1fr; }
-      .search-input { min-width: 100%; }
-    }
-  </style>
+  <title>工作台｜供应链台账助手</title>
+  <link rel="stylesheet" href="/static/ui.css">
 </head>
 
-<body>
+<body data-page="dashboard">
   <main class="page">
     <header class="header">
       <div>
-        <h1>发票台账助手</h1>
-        <p class="subtitle">发票识别、人工复核、账期管理与收付款跟踪</p>
+        <h1>工作台</h1>
+        <p class="subtitle">在一个入口查看发票、订单与账期预警，优先处理需要确认的业务事项。</p>
       </div>
+
       <div class="header-actions">
-        <a class="button-link" href="/static/orders.html">订单台账</a>
-        <a class="button-link" href="/static/entry.html">智能录入发票</a>
-        <a class="button-link" href="/api/export/ledger.xlsx">导出 Excel</a>
         <button id="logout-button" type="button">退出登录</button>
-        <button id="refresh-button">刷新台账</button>
+        <button id="refresh-button" type="button">刷新工作台</button>
       </div>
     </header>
 
-    <section class="filters">
-      <div class="filter-item">
-        <label for="type-filter">单据类型</label>
-        <select id="type-filter">
-          <option value="">全部类型</option>
-          <option value="销售发票">销售发票</option>
-          <option value="采购发票">采购发票</option>
-        </select>
+    <section class="work-snapshot" aria-label="业务概览">
+      <a class="snapshot-item" href="/static/invoices.html">
+        <span class="snapshot-label">发票台账</span>
+        <strong id="invoice-total" class="snapshot-value">0</strong>
+        <span id="invoice-summary" class="snapshot-hint">待复核 0 条</span>
+      </a>
+      <a class="snapshot-item" href="/static/orders.html">
+        <span class="snapshot-label">订单台账</span>
+        <strong id="order-total" class="snapshot-value">0</strong>
+        <span id="order-summary" class="snapshot-hint">待复核 0 条</span>
+      </a>
+      <a class="snapshot-item" href="#reminder-panel">
+        <span class="snapshot-label">账期预警</span>
+        <strong id="reminder-total" class="snapshot-value">0</strong>
+        <span id="reminder-summary-text" class="snapshot-hint">当前范围内待跟进</span>
+      </a>
+      <a class="snapshot-item" href="#work-queue">
+        <span class="snapshot-label">待人工确认</span>
+        <strong id="review-total" class="snapshot-value">0</strong>
+        <span class="snapshot-hint">发票与订单合计</span>
+      </a>
+    </section>
+
+    <section id="work-queue" class="work-queue">
+      <div class="work-queue-header">
+        <h2>待处理台账</h2>
+        <span id="work-status">正在加载…</span>
       </div>
 
-      <div class="filter-item">
-        <label for="status-filter">收付款状态</label>
-        <select id="status-filter">
-          <option value="">全部状态</option>
-          <option value="未收款">未收款</option>
-          <option value="部分收款">部分收款</option>
-          <option value="已收款">已收款</option>
-          <option value="未付款">未付款</option>
-          <option value="部分付款">部分付款</option>
-          <option value="已付款">已付款</option>
-        </select>
-      </div>
+      <div class="work-queue-list">
+        <article class="work-queue-row">
+          <div>
+            <div class="queue-title">发票台账</div>
+            <div id="invoice-queue-description" class="queue-description">正在读取发票数据…</div>
+          </div>
+          <div class="queue-metric">待复核<strong id="invoice-pending">0</strong></div>
+          <div class="queue-metric">未结清金额<strong id="invoice-balance">¥0.00</strong></div>
+          <a class="button-link queue-action" href="/static/invoices.html">查看发票</a>
+        </article>
 
-      <div class="filter-item">
-        <label for="keyword-filter">关键词</label>
-        <input
-          id="keyword-filter"
-          class="search-input"
-          placeholder="发票号、客户/供应商、订单号"
-        >
+        <article class="work-queue-row">
+          <div>
+            <div class="queue-title">订单台账</div>
+            <div id="order-queue-description" class="queue-description">正在读取订单数据…</div>
+          </div>
+          <div class="queue-metric">待复核<strong id="order-pending">0</strong></div>
+          <div class="queue-metric">订单总额<strong id="order-amount">¥0.00</strong></div>
+          <a class="button-link queue-action" href="/static/orders.html">查看订单</a>
+        </article>
       </div>
     </section>
 
-    <section class="kpis">
-      <article class="kpi-card">
-        <div class="kpi-label">台账数量</div>
-        <div class="kpi-value" id="kpi-count">0</div>
-        <div class="kpi-hint">当前筛选结果</div>
-      </article>
-
-      <article class="kpi-card">
-        <div class="kpi-label">待收款金额</div>
-        <div class="kpi-value" id="kpi-receivable">¥0.00</div>
-        <div class="kpi-hint">销售发票未结清余额</div>
-      </article>
-
-      <article class="kpi-card">
-        <div class="kpi-label">待付款金额</div>
-        <div class="kpi-value" id="kpi-payable">¥0.00</div>
-        <div class="kpi-hint">采购发票未结清余额</div>
-      </article>
-
-      <article class="kpi-card">
-        <div class="kpi-label">已逾期单据</div>
-        <div class="kpi-value" id="kpi-overdue">0</div>
-        <div class="kpi-hint">已过到期日且未结清</div>
-      </article>
-    </section>
-
-    <section class="reminder-card">
+    <section id="reminder-panel" class="reminder-card">
       <div class="reminder-header">
         <div>
           <h2>统一账期预警</h2>
-          <p>
-            同时展示订单与发票；已关联的同一笔业务优先保留发票提醒。
-            <span id="reminder-summary" class="reminder-summary"></span>
-          </p>
+          <p>展示未结清的订单与发票；已关联的同一笔业务优先保留发票提醒。<span id="reminder-summary" class="reminder-summary"></span></p>
         </div>
 
-        <label>
-          预警范围
-          <select id="reminder-days">
-            <option value="7">未来 7 天</option>
-            <option value="15">未来 15 天</option>
-            <option value="30">未来 30 天</option>
-          </select>
-        </label>
+        <div class="reminder-header-actions">
+          <label>
+            预警范围
+            <select id="reminder-days">
+              <option value="7">未来 7 天</option>
+              <option value="15">未来 15 天</option>
+              <option value="30">未来 30 天</option>
+            </select>
+          </label>
+          <button
+            id="reminder-settings-toggle"
+            class="reminder-settings-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="reminder-settings-panel"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06a1.7 1.7 0 0 0-1.88-.34 1.7 1.7 0 0 0-1.03 1.56V21h-4v-.09A1.7 1.7 0 0 0 8.97 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15 1.7 1.7 0 0 0 3.09 14H3v-4h.09A1.7 1.7 0 0 0 4.6 8.97a1.7 1.7 0 0 0-.34-1.88l-.06-.06L7.03 4.2l.06.06A1.7 1.7 0 0 0 8.97 4.6 1.7 1.7 0 0 0 10 3.09V3h4v.09a1.7 1.7 0 0 0 1.03 1.51 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.97 1.7 1.7 0 0 0 20.91 10H21v4h-.09A1.7 1.7 0 0 0 19.4 15Z"/></svg>
+            提醒设置
+          </button>
+        </div>
       </div>
+
+      <form id="reminder-settings-panel" class="reminder-settings-panel" hidden>
+        <div class="reminder-settings-intro">
+          <div>
+            <h3>每日钉钉提醒</h3>
+            <p>按设定时间扫描未结清单据；修改后立即更新下一次执行时间。</p>
+          </div>
+          <label class="reminder-enabled" for="reminder-enabled">
+            <input id="reminder-enabled" type="checkbox">
+            <span>启用每日提醒</span>
+          </label>
+        </div>
+
+        <div class="reminder-settings-fields">
+          <label for="reminder-time">
+            每日发送时间
+            <input id="reminder-time" type="time" required>
+          </label>
+          <label for="reminder-settings-days">
+            钉钉扫描范围
+            <span class="number-input-wrap">
+              <input id="reminder-settings-days" type="number" min="0" max="365" required>
+              <span>天</span>
+            </span>
+          </label>
+          <div class="next-run-status">
+            <span>下次执行</span>
+            <strong id="reminder-next-run">打开设置后读取</strong>
+          </div>
+          <div class="reminder-settings-actions">
+            <button id="reminder-test-button" class="reminder-test-button" type="button">发送测试消息</button>
+            <button id="reminder-save-button" type="submit">保存设置</button>
+          </div>
+        </div>
+        <p id="reminder-settings-feedback" class="reminder-settings-feedback" role="status" aria-live="polite"></p>
+      </form>
 
       <div id="reminder-list" class="reminder-list"></div>
     </section>
 
     <section class="table-card">
       <div class="table-title">
-        <h2>发票台账明细</h2>
-        <span id="status-message" class="status-message">正在加载…</span>
+        <h2>发票明细</h2>
+        <span class="status-message">按上传/入库时间由新到旧</span>
       </div>
 
       <div class="table-wrap">
@@ -433,30 +155,50 @@
               <th>类型</th>
               <th>购方 / 销方</th>
               <th>价税合计</th>
-              <th>累计收付 / 剩余</th>
-              <th>到期日</th>
               <th>收付款状态</th>
-              <th>复核状态</th>
-              <th>关联订单</th>
+              <th>到期日</th>
+              <th>上传时间</th>
               <th>操作</th>
             </tr>
           </thead>
-          <tbody id="invoice-table-body"></tbody>
+          <tbody id="workspace-invoice-body"></tbody>
         </table>
       </div>
 
-      <div id="empty-message" class="empty" hidden>暂无符合条件的台账记录。</div>
+      <div id="workspace-invoice-empty" class="empty" hidden>暂无发票记录。</div>
+    </section>
+
+    <section class="table-card">
+      <div class="table-title">
+        <h2>订单明细</h2>
+        <span class="status-message">按上传/入库时间由新到旧</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>订单号 / 合同号</th>
+              <th>类型</th>
+              <th>往来单位</th>
+              <th>订单金额</th>
+              <th>开票状态</th>
+              <th>收付款状态</th>
+              <th>上传时间</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="workspace-order-body"></tbody>
+        </table>
+      </div>
+
+      <div id="workspace-order-empty" class="empty" hidden>暂无订单记录。</div>
     </section>
   </main>
 
+  <script src="/static/ui.js"></script>
   <script>
-    const state = {
-      invoices: [],
-      filteredInvoices: [],
-      reminders: [],
-      reminderMeta: {}
-    };
-
+    const state = { invoices: [], orders: [], reminders: [], reminderMeta: {} };
     const currencyFormatter = new Intl.NumberFormat("zh-CN", {
       style: "currency",
       currency: "CNY",
@@ -476,298 +218,338 @@
         .replaceAll("'", "&#039;");
     }
 
-    function getOutstandingAmount(invoice) {
-      return Math.max(
-        0,
-        Number(invoice.amount_incl_tax || 0) - Number(invoice.paid_amount || 0)
-      );
-    }
-
-    function isSettled(invoice) {
-      return getOutstandingAmount(invoice) <= 0.009;
+    function getOutstandingAmount(record, totalKey) {
+      return Math.max(0, Number(record[totalKey] || 0) - Number(record.paid_amount || 0));
     }
 
     function getStatusClass(status) {
-      if (["已收款", "已付款", "已确认"].includes(status)) {
-        return "tag-success";
-      }
-
-      if (["部分收款", "部分付款", "待人工确认"].includes(status)) {
-        return "tag-warning";
-      }
-
-      if (["未收款", "未付款", "需人工复核"].includes(status)) {
-        return "tag-danger";
-      }
-
+      if (["已收款", "已付款", "已确认", "已关联发票"].includes(status)) return "tag-success";
+      if (["部分收款", "部分付款", "待人工确认"].includes(status)) return "tag-warning";
+      if (["未收款", "未付款", "需人工复核", "未开票"].includes(status)) return "tag-danger";
       return "tag-neutral";
     }
 
-    function isOverdue(invoice) {
-      if (!invoice.due_date || isSettled(invoice)) {
-        return false;
-      }
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const dueDate = new Date(`${invoice.due_date}T00:00:00`);
-      return dueDate < today;
+    function pendingReviewCount(records) {
+      return records.filter((record) => record.review_status !== "已确认").length;
     }
 
-    function applyFilters() {
-      const documentType = document.getElementById("type-filter").value;
-      const paymentStatus = document.getElementById("status-filter").value;
-      const keyword = document.getElementById("keyword-filter").value
-        .trim()
-        .toLowerCase();
+    function renderWorkspace() {
+      const invoicePending = pendingReviewCount(state.invoices);
+      const orderPending = pendingReviewCount(state.orders);
+      const invoiceBalance = state.invoices.reduce(
+        (sum, invoice) => sum + getOutstandingAmount(invoice, "amount_incl_tax"),
+        0
+      );
+      const orderAmount = state.orders.reduce(
+        (sum, order) => sum + Number(order.order_amount || 0),
+        0
+      );
 
-      state.filteredInvoices = state.invoices.filter((invoice) => {
-        if (documentType && invoice.document_type !== documentType) {
-          return false;
-        }
-
-        if (paymentStatus && invoice.payment_status !== paymentStatus) {
-          return false;
-        }
-
-        const searchableText = [
-          invoice.invoice_number,
-          invoice.buyer_name,
-          invoice.seller_name,
-          ...(invoice.order_numbers || [])
-        ].join(" ").toLowerCase();
-
-        return !keyword || searchableText.includes(keyword);
-      });
-
-      renderDashboard();
-    }
-
-    function renderKpis() {
-      const invoices = state.filteredInvoices;
-
-      const receivable = invoices
-        .filter((item) => item.document_type === "销售发票")
-        .reduce((sum, item) => sum + getOutstandingAmount(item), 0);
-
-      const payable = invoices
-        .filter((item) => item.document_type === "采购发票")
-        .reduce((sum, item) => sum + getOutstandingAmount(item), 0);
-
-      const overdueCount = invoices.filter(isOverdue).length;
-
-      document.getElementById("kpi-count").textContent = invoices.length;
-      document.getElementById("kpi-receivable").textContent = formatMoney(receivable);
-      document.getElementById("kpi-payable").textContent = formatMoney(payable);
-      document.getElementById("kpi-overdue").textContent = overdueCount;
-    }
-
-    function renderTable() {
-      const body = document.getElementById("invoice-table-body");
-      const emptyMessage = document.getElementById("empty-message");
-
-      if (state.filteredInvoices.length === 0) {
-        body.innerHTML = "";
-        emptyMessage.hidden = false;
-        return;
-      }
-
-      emptyMessage.hidden = true;
-
-      body.innerHTML = state.filteredInvoices.map((invoice) => {
-        const outstanding = getOutstandingAmount(invoice);
-        const orderNumbers = (invoice.order_numbers || [])
-          .map(escapeHtml)
-          .join("<br>");
-
-        return `
-          <tr>
-            <td>${escapeHtml(invoice.invoice_number)}</td>
-            <td>${escapeHtml(invoice.document_type)}</td>
-            <td>
-              <div>${escapeHtml(invoice.buyer_name || "-")}</div>
-              <div class="muted">${escapeHtml(invoice.seller_name || "-")}</div>
-            </td>
-            <td class="amount">${formatMoney(invoice.amount_incl_tax)}</td>
-            <td class="amount">
-              <div>${formatMoney(invoice.paid_amount)}</div>
-              <div class="muted">剩余：${formatMoney(outstanding)}</div>
-            </td>
-            <td>${escapeHtml(invoice.due_date || "待填写")}</td>
-            <td>
-              <span class="tag ${getStatusClass(invoice.payment_status)}">
-                ${escapeHtml(invoice.payment_status)}
-              </span>
-            </td>
-            <td>
-              <span class="tag ${getStatusClass(invoice.review_status)}">
-                ${escapeHtml(invoice.review_status)}
-              </span>
-            </td>
-            <td>${orderNumbers || "-"}</td>
-            <td>
-              <a
-                class="table-action"
-                href="/static/edit.html?id=${Number(invoice.id)}"
-              >
-                更新
-              </a>
-            </td>
-          </tr>
-        `;
-      }).join("");
+      document.getElementById("invoice-total").textContent = state.invoices.length;
+      document.getElementById("invoice-summary").textContent = `待复核 ${invoicePending} 条`;
+      document.getElementById("order-total").textContent = state.orders.length;
+      document.getElementById("order-summary").textContent = `待复核 ${orderPending} 条`;
+      document.getElementById("reminder-total").textContent = state.reminders.length;
+      document.getElementById("review-total").textContent = invoicePending + orderPending;
+      document.getElementById("invoice-pending").textContent = invoicePending;
+      document.getElementById("invoice-balance").textContent = formatMoney(invoiceBalance);
+      document.getElementById("order-pending").textContent = orderPending;
+      document.getElementById("order-amount").textContent = formatMoney(orderAmount);
+      document.getElementById("invoice-queue-description").textContent = `共 ${state.invoices.length} 条发票记录，收付款与复核状态在此维护。`;
+      document.getElementById("order-queue-description").textContent = `共 ${state.orders.length} 条订单记录，支持开票关联与账期跟进。`;
+      document.getElementById("reminder-summary-text").textContent = state.reminders.length
+        ? "当前范围内待跟进"
+        : "当前范围内暂无预警";
+      document.getElementById("work-status").textContent = "数据已更新";
     }
 
     function getReminderClass(status) {
-      if (status === "已逾期") {
-        return "tag-danger";
-      }
-
-      if (status === "今日到期") {
-        return "tag-warning";
-      }
-
+      if (status === "已逾期") return "tag-danger";
+      if (status === "今日到期") return "tag-warning";
       return "tag-neutral";
     }
 
     function renderReminders() {
       const container = document.getElementById("reminder-list");
       const summary = document.getElementById("reminder-summary");
-      const suppressed = Number(
-        state.reminderMeta.suppressed_duplicate_total || 0
-      );
+      const suppressed = Number(state.reminderMeta.suppressed_duplicate_total || 0);
 
       summary.textContent = suppressed > 0
         ? `本次已合并 ${suppressed} 条重复提醒。`
         : "本次没有重复提醒。";
 
-      if (state.reminders.length === 0) {
-        container.innerHTML = `
-          <div class="muted">
-            当前预警范围内暂无需要跟进的未结清单据。
-          </div>
-        `;
+      if (!state.reminders.length) {
+        container.innerHTML = '<div class="muted">当前预警范围内暂无需要跟进的未结清单据。</div>';
         return;
       }
 
       container.innerHTML = state.reminders.map((item) => {
         const isInvoice = item.source_type === "invoice";
-        const documentType = isInvoice
-          ? item.document_type
-          : item.order_type;
-        const documentNumber = isInvoice
-          ? item.invoice_number
-          : item.order_number;
+        const documentType = isInvoice ? item.document_type : item.order_type;
+        const documentNumber = isInvoice ? item.invoice_number : item.order_number;
         const editUrl = isInvoice
           ? `/static/edit.html?id=${encodeURIComponent(item.invoice_id)}`
           : `/static/order-edit.html?id=${encodeURIComponent(item.order_id)}`;
-        const amountLabel = ["销售发票", "销售订单"].includes(documentType)
-          ? "待收款"
-          : "待付款";
+        const amountLabel = ["销售发票", "销售订单"].includes(documentType) ? "待收款" : "待付款";
         const timeText = item.days_to_due < 0
           ? `已逾期 ${Math.abs(item.days_to_due)} 天`
-          : item.days_to_due === 0
-            ? "今日到期"
-            : `剩余 ${item.days_to_due} 天`;
+          : item.days_to_due === 0 ? "今日到期" : `剩余 ${item.days_to_due} 天`;
         const relatedOrders = isInvoice && (item.order_numbers || []).length
           ? `｜关联订单：${item.order_numbers.map(escapeHtml).join("、")}`
           : "";
 
         return `
           <article class="reminder-item">
-            <div>
-              <span class="tag ${getReminderClass(item.reminder_status)}">
-                ${escapeHtml(item.reminder_status)}
-              </span>
-              <div class="muted">${escapeHtml(documentType)}</div>
-            </div>
-
-            <div>
-              <strong>
-                <a class="reminder-link" href="${editUrl}">
-                  ${escapeHtml(documentNumber)}
-                </a>
-              </strong>
-              <div>${escapeHtml(item.counterparty || "-")}</div>
-              <div class="muted">
-                到期日：${escapeHtml(item.due_date)}
-                ｜${escapeHtml(timeText)}
-                ｜负责人：${escapeHtml(item.owner || "待分配")}
-                ${relatedOrders}
-              </div>
-            </div>
-
-            <div class="reminder-amount">
-              ${escapeHtml(amountLabel)}：${formatMoney(item.amount_due)}
-            </div>
+            <div><span class="tag ${getReminderClass(item.reminder_status)}">${escapeHtml(item.reminder_status)}</span><div class="muted">${escapeHtml(documentType)}</div></div>
+            <div><strong><a class="reminder-link" href="${editUrl}">${escapeHtml(documentNumber)}</a></strong><div>${escapeHtml(item.counterparty || "-")}</div><div class="muted">到期日：${escapeHtml(item.due_date)}｜${escapeHtml(timeText)}｜负责人：${escapeHtml(item.owner || "待分配")}${relatedOrders}</div></div>
+            <div class="reminder-amount">${escapeHtml(amountLabel)}：${formatMoney(item.amount_due)}</div>
           </article>
         `;
       }).join("");
     }
 
-    function renderDashboard() {
-      renderKpis();
-      renderTable();
-
-      document.getElementById("status-message").textContent =
-        `当前展示 ${state.filteredInvoices.length} 条记录`;
+    function formatReminderTime(hour, minute) {
+      return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
     }
 
-    async function loadInvoices() {
-      const statusMessage = document.getElementById("status-message");
-      const reminderDays = document.getElementById("reminder-days").value;
+    function formatNextRunTime(value, schedulerRunning) {
+      if (!schedulerRunning) return "调度器未启动";
+      if (!value) return "当前未启用";
 
-      statusMessage.textContent = "正在加载…";
+      const nextRun = new Date(value);
+      if (Number.isNaN(nextRun.getTime())) return String(value);
+
+      return new Intl.DateTimeFormat("zh-CN", {
+        timeZone: "Asia/Shanghai",
+        month: "numeric",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false
+      }).format(nextRun);
+    }
+
+    function setReminderSettingsFeedback(message, type = "") {
+      const feedback = document.getElementById("reminder-settings-feedback");
+      feedback.textContent = message;
+      feedback.dataset.type = type;
+    }
+
+    function populateReminderSettings(settings, status = {}) {
+      document.getElementById("reminder-enabled").checked = Boolean(settings.enabled);
+      document.getElementById("reminder-time").value = formatReminderTime(
+        settings.reminder_hour,
+        settings.reminder_minute
+      );
+      document.getElementById("reminder-settings-days").value = settings.days_before;
+      document.getElementById("reminder-next-run").textContent = formatNextRunTime(
+        status.next_run_time ?? settings.next_run_time,
+        status.running ?? settings.scheduler_running
+      );
+    }
+
+    async function readJsonResponse(response, fallbackMessage) {
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const detail = typeof result.detail === "string" ? result.detail : fallbackMessage;
+        throw new Error(detail);
+      }
+      return result;
+    }
+
+    async function loadReminderSettings() {
+      setReminderSettingsFeedback("正在读取提醒设置…");
 
       try {
-        const [invoiceResponse, reminderResponse] = await Promise.all([
-          fetch("/api/invoices"),
-          fetch(`/api/reminders/all/due?days_before=${reminderDays}`)
+        const [settingsResponse, statusResponse] = await Promise.all([
+          fetch("/api/reminder-settings"),
+          fetch("/api/scheduler/status")
         ]);
-
-        if (!invoiceResponse.ok) {
-          throw new Error(`台账请求失败：${invoiceResponse.status}`);
-        }
-
-        if (!reminderResponse.ok) {
-          throw new Error(`提醒请求失败：${reminderResponse.status}`);
-        }
-
-        const invoiceResult = await invoiceResponse.json();
-        const reminderResult = await reminderResponse.json();
-
-        state.invoices = invoiceResult.items || [];
-        state.reminders = reminderResult.items || [];
-        state.reminderMeta = reminderResult;
-
-        applyFilters();
-        renderReminders();
+        const [settings, status] = await Promise.all([
+          readJsonResponse(settingsResponse, "读取提醒设置失败。"),
+          readJsonResponse(statusResponse, "读取调度器状态失败。")
+        ]);
+        populateReminderSettings(settings, status);
+        setReminderSettingsFeedback("");
       } catch (error) {
-        console.error(error);
-
-        state.invoices = [];
-        state.filteredInvoices = [];
-        state.reminders = [];
-        state.reminderMeta = {};
-
-        renderDashboard();
-        renderReminders();
-
-        statusMessage.textContent = "加载失败，请确认后端服务正在运行。";
+        setReminderSettingsFeedback(error.message, "error");
       }
     }
 
-    document.getElementById("refresh-button").addEventListener("click", loadInvoices);
+    async function saveReminderSettings(event) {
+      event.preventDefault();
+      const saveButton = document.getElementById("reminder-save-button");
+      const time = document.getElementById("reminder-time").value;
+      const [hour, minute] = time.split(":").map(Number);
+      const daysBefore = Number(document.getElementById("reminder-settings-days").value);
+
+      if (!time || !Number.isInteger(hour) || !Number.isInteger(minute)) {
+        setReminderSettingsFeedback("请选择有效的每日发送时间。", "error");
+        return;
+      }
+
+      saveButton.disabled = true;
+      setReminderSettingsFeedback("正在保存设置…");
+
+      try {
+        const response = await fetch("/api/reminder-settings", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            enabled: document.getElementById("reminder-enabled").checked,
+            reminder_hour: hour,
+            reminder_minute: minute,
+            days_before: daysBefore
+          })
+        });
+        const settings = await readJsonResponse(response, "保存提醒设置失败。");
+        populateReminderSettings(settings);
+        setReminderSettingsFeedback("设置已保存，定时任务已更新。", "success");
+      } catch (error) {
+        setReminderSettingsFeedback(error.message, "error");
+      } finally {
+        saveButton.disabled = false;
+      }
+    }
+
+    async function sendReminderTest() {
+      const testButton = document.getElementById("reminder-test-button");
+      testButton.disabled = true;
+      setReminderSettingsFeedback("正在发送钉钉测试消息…");
+
+      try {
+        const response = await fetch("/api/notifications/dingtalk/test", { method: "POST" });
+        const result = await readJsonResponse(response, "钉钉测试消息发送失败。");
+        setReminderSettingsFeedback(result.message || "测试消息已发送。", "success");
+      } catch (error) {
+        setReminderSettingsFeedback(error.message, "error");
+      } finally {
+        testButton.disabled = false;
+      }
+    }
+
+    function sortByUploadedAt(records) {
+      return [...records].sort((left, right) => String(right.created_at || "").localeCompare(String(left.created_at || "")));
+    }
+
+    function formatUploadedAt(value) {
+      return value ? String(value).replace("T", " ").slice(0, 16) : "-";
+    }
+
+    function renderInvoiceDetails() {
+      const body = document.getElementById("workspace-invoice-body");
+      const empty = document.getElementById("workspace-invoice-empty");
+      const invoices = sortByUploadedAt(state.invoices);
+
+      if (!invoices.length) {
+        body.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+
+      empty.hidden = true;
+      body.innerHTML = invoices.map((invoice) => `
+        <tr>
+          <td>${escapeHtml(invoice.invoice_number)}</td>
+          <td>${escapeHtml(invoice.document_type)}</td>
+          <td><div>${escapeHtml(invoice.buyer_name || "-")}</div><div class="muted">${escapeHtml(invoice.seller_name || "-")}</div></td>
+          <td class="amount">${formatMoney(invoice.amount_incl_tax)}</td>
+          <td><span class="tag ${getStatusClass(invoice.payment_status)}">${escapeHtml(invoice.payment_status)}</span></td>
+          <td>${escapeHtml(invoice.due_date || "待填写")}</td>
+          <td class="muted">${escapeHtml(formatUploadedAt(invoice.created_at))}</td>
+          <td><a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">更新</a></td>
+        </tr>
+      `).join("");
+    }
+
+    function renderOrderDetails() {
+      const body = document.getElementById("workspace-order-body");
+      const empty = document.getElementById("workspace-order-empty");
+      const orders = sortByUploadedAt(state.orders);
+
+      if (!orders.length) {
+        body.innerHTML = "";
+        empty.hidden = false;
+        return;
+      }
+
+      empty.hidden = true;
+      body.innerHTML = orders.map((order) => `
+        <tr>
+          <td><div>${escapeHtml(order.order_number)}</div><div class="muted">${escapeHtml(order.contract_number || "-")}</div></td>
+          <td>${escapeHtml(order.order_type)}</td>
+          <td>${escapeHtml(order.counterparty_name || "-")}</td>
+          <td class="amount">${formatMoney(order.order_amount)}</td>
+          <td><span class="tag ${getStatusClass(order.invoice_status)}">${escapeHtml(order.invoice_status)}</span></td>
+          <td><span class="tag ${getStatusClass(order.payment_status)}">${escapeHtml(order.payment_status)}</span></td>
+          <td class="muted">${escapeHtml(formatUploadedAt(order.created_at))}</td>
+          <td><a class="table-action" href="/static/order-edit.html?id=${Number(order.id)}">更新</a></td>
+        </tr>
+      `).join("");
+    }
+
+    async function loadWorkspace() {
+      const status = document.getElementById("work-status");
+      const reminderDays = document.getElementById("reminder-days").value;
+      status.textContent = "正在加载…";
+
+      try {
+        const [invoiceResponse, orderResponse, reminderResponse] = await Promise.all([
+          fetch("/api/invoices"),
+          fetch("/api/orders"),
+          fetch(`/api/reminders/all/due?days_before=${reminderDays}`)
+        ]);
+
+        if (!invoiceResponse.ok || !orderResponse.ok || !reminderResponse.ok) {
+          throw new Error("读取工作台数据失败。");
+        }
+
+        const [invoiceResult, orderResult, reminderResult] = await Promise.all([
+          invoiceResponse.json(),
+          orderResponse.json(),
+          reminderResponse.json()
+        ]);
+
+        state.invoices = invoiceResult.items || [];
+        state.orders = orderResult.items || [];
+        state.reminders = reminderResult.items || [];
+        state.reminderMeta = reminderResult;
+        renderWorkspace();
+        renderReminders();
+        renderInvoiceDetails();
+        renderOrderDetails();
+      } catch (error) {
+        console.error(error);
+        state.invoices = [];
+        state.orders = [];
+        state.reminders = [];
+        state.reminderMeta = {};
+        renderWorkspace();
+        renderReminders();
+        renderInvoiceDetails();
+        renderOrderDetails();
+        status.textContent = "加载失败，请确认后端服务正在运行。";
+      }
+    }
+
+    document.getElementById("refresh-button").addEventListener("click", loadWorkspace);
     document.getElementById("logout-button").addEventListener("click", async () => {
       await fetch("/api/auth/logout", { method: "POST" });
       window.location.href = "/login";
     });
-    document.getElementById("type-filter").addEventListener("change", applyFilters);
-    document.getElementById("status-filter").addEventListener("change", applyFilters);
-    document.getElementById("keyword-filter").addEventListener("input", applyFilters);
-    document.getElementById("reminder-days").addEventListener("change", loadInvoices);
-    loadInvoices();
+    document.getElementById("reminder-days").addEventListener("change", loadWorkspace);
+    document.getElementById("reminder-settings-toggle").addEventListener("click", () => {
+      const panel = document.getElementById("reminder-settings-panel");
+      const toggle = document.getElementById("reminder-settings-toggle");
+      const willOpen = panel.hidden;
+      panel.hidden = !willOpen;
+      toggle.setAttribute("aria-expanded", String(willOpen));
+      toggle.classList.toggle("is-open", willOpen);
+      if (willOpen) loadReminderSettings();
+    });
+    document.getElementById("reminder-settings-panel").addEventListener("submit", saveReminderSettings);
+    document.getElementById("reminder-test-button").addEventListener("click", sendReminderTest);
+    loadWorkspace();
   </script>
 </body>
 </html>

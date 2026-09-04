@@ -7,7 +7,9 @@ from app.services.ledger import (
     list_invoice_records,
     list_order_records
 )
-
+from app.services.reminder_settings import (
+    get_reminder_settings,
+)
 
 def validate_reminder_range(days_before: int) -> None:
     if days_before < 0 or days_before > 90:
@@ -344,7 +346,12 @@ def build_due_reminder_message(reminders: list[dict]) -> str:
 
 
 async def run_daily_dingtalk_reminders_service() -> dict:
-    reminders = get_combined_due_reminders(days_before=7)
+    settings = get_reminder_settings()
+    days_before = settings["days_before"]
+
+    reminders = get_combined_due_reminders(
+        days_before=days_before
+    )
     unsent = get_unsent_dingtalk_reminders(reminders)
     if not unsent:
         return {

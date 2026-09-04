@@ -112,7 +112,8 @@ def auth_is_configured() -> bool:
 async def require_login(request: Request, call_next):
     public_paths = {
         "/login",
-        "/api/auth/login"
+        "/api/auth/login",
+        "/static/ui.css"
     }
 
     if request.url.path in public_paths:

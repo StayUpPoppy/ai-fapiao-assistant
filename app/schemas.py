@@ -86,3 +86,8 @@ class OrderUpdate(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+class ReminderSettingsUpdate(BaseModel):
+    enabled: bool
+    reminder_hour: int = Field(ge=0, le=23)
+    reminder_minute: int = Field(ge=0, le=59)
+    days_before: int = Field(ge=0, le=365)

@@ -353,9 +353,10 @@
       .search-input { min-width: 100%; }
     }
   </style>
+  <link rel="stylesheet" href="/static/ui.css">
 </head>
 
-<body>
+<body data-page="orders">
   <main class="page">
     <header class="header">
       <div>
@@ -364,8 +365,6 @@
       </div>
 
       <div class="header-actions">
-        <a class="button-link" href="/">发票台账</a>
-        <a class="button-link" href="/api/export/ledger.xlsx">导出 Excel</a>
         <button id="create-button">新增订单</button>
         <button id="logout-button" type="button">退出登录</button>
         <button id="refresh-button">刷新台账</button>
@@ -584,6 +583,7 @@
     </div>
   </dialog>
 
+  <script src="/static/ui.js"></script>
   <script>
     const state = {
       orders: [],

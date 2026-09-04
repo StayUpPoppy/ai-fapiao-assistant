@@ -124,13 +124,29 @@
       line-height: 1.6;
     }
   </style>
+  <link rel="stylesheet" href="/static/ui.css">
 </head>
 
-<body>
-  <main class="login-card">
-    <div class="brand">AI</div>
-    <h1>供应链台账助手</h1>
-    <p class="subtitle">请输入内部账号，登录后管理订单、发票、账期及收付款信息。</p>
+<body class="login-page" data-page="login">
+  <main class="login-shell">
+    <section class="login-intro" aria-label="产品介绍">
+      <div class="login-brand"><span class="login-brand-mark">⌁</span>供应链台账助手</div>
+      <h1>让单据、台账与账期管理更清晰</h1>
+      <p>从单据识别到台账入库，再到账期跟进，业务人员始终只需处理关键的确认动作。</p>
+      <div class="login-preview">待复核 <strong>3</strong><span>·</span>即将到期 <strong>2</strong></div>
+      <div class="login-flow" aria-label="业务流程">
+        <div class="login-flow-item"><div class="login-flow-icon">▤</div>单据上传</div>
+        <div class="login-flow-item"><div class="login-flow-icon">AI</div>识别提取</div>
+        <div class="login-flow-item"><div class="login-flow-icon">✓</div>人工复核</div>
+        <div class="login-flow-item"><div class="login-flow-icon">◷</div>账期跟进</div>
+      </div>
+    </section>
+
+    <section class="login-panel">
+    <div class="login-card">
+      <div class="brand">⌁</div>
+      <h2>供应链台账助手</h2>
+      <p class="subtitle">登录后继续处理订单、发票与账期事项。</p>
 
     <form id="login-form">
       <label>
@@ -148,6 +164,8 @@
 
     <div id="message" class="message" aria-live="polite"></div>
     <p class="security-hint">AI 识别结果仍需业务人员确认后保存，请勿与无关人员共享账号。</p>
+    </div>
+    </section>
   </main>
 
   <script>

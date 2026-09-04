@@ -1,0 +1,59 @@
+{
+  "title": "明亮简约方向｜供应链台账助手",
+  "question": "三套方案分别偏向任务、数据和流程，但都保持明亮、简洁和清晰。请选择最符合日常办公习惯的一套。",
+  "options": [
+    {
+      "id": "clean-inbox",
+      "label": "清爽工作收件箱",
+      "kicker": "RECOMMENDED",
+      "lineage": "企业收件箱 × 单据处理队列",
+      "thesis": "把所有工作收拢成一个待处理清单，选中单据后在右侧直接查看和处理。",
+      "palette": ["#F7F9FC", "#FFFFFF", "#172033", "#2563EB", "#14B8A6"],
+      "materials": ["轻薄分隔线", "纸白内容面"],
+      "viewport": "顶部是搜索和智能录入；左侧为精简导航；中间是按优先级排序的单据列表；右侧固定展示当前单据详情、关联订单和下一步动作。",
+      "risk": "主从布局在较窄屏幕上需要把详情区切换为抽屉。",
+      "comp": ".impeccable/mocks/decision/clean-inbox.png"
+    },
+    {
+      "id": "light-ledger",
+      "label": "轻量台账表",
+      "lineage": "电子表格 × 现代财务工作台",
+      "thesis": "让表格成为绝对主角，用极少的卡片和最短路径完成筛选、编辑与导出。",
+      "palette": ["#FAFBFC", "#FFFFFF", "#182230", "#3B82F6", "#E9EEF5"],
+      "materials": ["冻结表头", "柔和行分组"],
+      "viewport": "一行紧凑指标、一条组合筛选栏和一张占据大部分屏幕的高密度台账表；临期与复核状态直接嵌入行内。",
+      "risk": "效率最高，但个性最弱，需要通过字体、间距和细节建立品质。",
+      "comp": ".impeccable/mocks/decision/light-ledger.png"
+    },
+    {
+      "id": "guided-flow",
+      "label": "清晰流程工作台",
+      "lineage": "业务办理大厅 × 分步工作流",
+      "thesis": "用三个清楚阶段串起上传识别、人工复核和后续跟进，让新用户不会迷路。",
+      "palette": ["#F6FAF8", "#FFFFFF", "#17312B", "#2F8068", "#E8B65A"],
+      "materials": ["柔和阶段轨道", "白色表单纸"],
+      "viewport": "首屏顶部显示识别、复核、跟进三阶段进度；主体左侧是今日任务，右侧是当前步骤和快捷入口；台账从导航进入独立高密度页面。",
+      "risk": "对熟练用户而言，阶段引导可能比纯表格多一次视线移动。",
+      "comp": ".impeccable/mocks/decision/guided-flow.png"
+    }
+  ],
+  "reroll": {
+    "registers": ["safer", "bolder"]
+  },
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  },
+  "canon": true,
+  "canonCard": {
+    "label": "经典明亮企业后台",
+    "lineage": "飞书多维表格 × SAP Fiori × 金蝶云星空",
+    "thesis": "沿用成熟企业软件的左栏、指标卡和数据表组合，以最低学习成本交付。",
+    "palette": ["#FFFFFF", "#F5F7FA", "#1F2937", "#1677FF", "#E5E7EB"],
+    "materials": ["标准栅格", "轻量数据卡片"],
+    "viewport": "浅色侧栏、顶部操作区、四张简洁指标卡、账期提醒和完整台账表。",
+    "risk": "最稳妥也最熟悉，但产品辨识度有限。",
+    "comp": ".impeccable/mocks/decision/bright-canon.png"
+  },
+  "steer": true
+}

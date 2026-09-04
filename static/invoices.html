@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>发票台账｜供应链台账助手</title>
+  <link rel="stylesheet" href="/static/ui.css">
+</head>
+
+<body data-page="invoices">
+  <main class="page">
+    <header class="header">
+      <div>
+        <h1>发票台账</h1>
+        <p class="subtitle">集中查看销售与采购发票，并维护收付款、账期和复核状态。</p>
+      </div>
+
+      <div class="header-actions">
+        <a class="button-link" href="/static/entry.html">智能录入发票</a>
+        <button id="logout-button" type="button">退出登录</button>
+        <button id="refresh-button" type="button">刷新台账</button>
+      </div>
+    </header>
+
+    <section class="filters" aria-label="发票筛选">
+      <div class="filter-item">
+        <label for="type-filter">单据类型</label>
+        <select id="type-filter">
+          <option value="">全部类型</option>
+          <option value="销售发票">销售发票</option>
+          <option value="采购发票">采购发票</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="status-filter">收付款状态</label>
+        <select id="status-filter">
+          <option value="">全部状态</option>
+          <option value="未收款">未收款</option>
+          <option value="部分收款">部分收款</option>
+          <option value="已收款">已收款</option>
+          <option value="未付款">未付款</option>
+          <option value="部分付款">部分付款</option>
+          <option value="已付款">已付款</option>
+        </select>
+      </div>
+
+      <div class="filter-item">
+        <label for="keyword-filter">关键词</label>
+        <input id="keyword-filter" class="search-input" placeholder="发票号、客户/供应商、订单号">
+      </div>
+    </section>
+
+    <section class="kpis" aria-label="发票台账概览">
+      <article class="kpi-card">
+        <div class="kpi-label">发票数量</div>
+        <div class="kpi-value" id="kpi-count">0</div>
+        <div class="kpi-hint">当前筛选结果</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">待收款金额</div>
+        <div class="kpi-value" id="kpi-receivable">¥0.00</div>
+        <div class="kpi-hint">销售发票未结清余额</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">待付款金额</div>
+        <div class="kpi-value" id="kpi-payable">¥0.00</div>
+        <div class="kpi-hint">采购发票未结清余额</div>
+      </article>
+      <article class="kpi-card">
+        <div class="kpi-label">已逾期单据</div>
+        <div class="kpi-value" id="kpi-overdue">0</div>
+        <div class="kpi-hint">已过到期日且未结清</div>
+      </article>
+    </section>
+
+    <section class="table-card">
+      <div class="table-title">
+        <h2>发票明细</h2>
+        <span id="status-message" class="status-message">正在加载…</span>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>发票号</th>
+              <th>类型</th>
+              <th>购方 / 销方</th>
+              <th>价税合计</th>
+              <th>累计收付 / 剩余</th>
+              <th>到期日</th>
+              <th>收付款状态</th>
+              <th>复核状态</th>
+              <th>关联订单</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody id="invoice-table-body"></tbody>
+        </table>
+      </div>
+
+      <div id="empty-message" class="empty" hidden>暂无符合条件的发票记录。</div>
+    </section>
+  </main>
+
+  <script src="/static/ui.js"></script>
+  <script>
+    const state = { invoices: [], filteredInvoices: [] };
+    const currencyFormatter = new Intl.NumberFormat("zh-CN", {
+      style: "currency",
+      currency: "CNY",
+      minimumFractionDigits: 2
+    });
+
+    function formatMoney(value) {
+      return currencyFormatter.format(Number(value || 0));
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function getOutstandingAmount(invoice) {
+      return Math.max(
+        0,
+        Number(invoice.amount_incl_tax || 0) - Number(invoice.paid_amount || 0)
+      );
+    }
+
+    function isSettled(invoice) {
+      return getOutstandingAmount(invoice) <= 0.009;
+    }
+
+    function isOverdue(invoice) {
+      if (!invoice.due_date || isSettled(invoice)) {
+        return false;
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      return new Date(`${invoice.due_date}T00:00:00`) < today;
+    }
+
+    function getStatusClass(status) {
+      if (["已收款", "已付款", "已确认"].includes(status)) return "tag-success";
+      if (["部分收款", "部分付款", "待人工确认"].includes(status)) return "tag-warning";
+      if (["未收款", "未付款", "需人工复核"].includes(status)) return "tag-danger";
+      return "tag-neutral";
+    }
+
+    function applyFilters() {
+      const documentType = document.getElementById("type-filter").value;
+      const paymentStatus = document.getElementById("status-filter").value;
+      const keyword = document.getElementById("keyword-filter").value.trim().toLowerCase();
+
+      state.filteredInvoices = state.invoices.filter((invoice) => {
+        if (documentType && invoice.document_type !== documentType) return false;
+        if (paymentStatus && invoice.payment_status !== paymentStatus) return false;
+
+        const searchableText = [
+          invoice.invoice_number,
+          invoice.buyer_name,
+          invoice.seller_name,
+          ...(invoice.order_numbers || [])
+        ].join(" ").toLowerCase();
+
+        return !keyword || searchableText.includes(keyword);
+      });
+
+      renderLedger();
+    }
+
+    function renderKpis() {
+      const invoices = state.filteredInvoices;
+      const receivable = invoices
+        .filter((item) => item.document_type === "销售发票")
+        .reduce((sum, item) => sum + getOutstandingAmount(item), 0);
+      const payable = invoices
+        .filter((item) => item.document_type === "采购发票")
+        .reduce((sum, item) => sum + getOutstandingAmount(item), 0);
+
+      document.getElementById("kpi-count").textContent = invoices.length;
+      document.getElementById("kpi-receivable").textContent = formatMoney(receivable);
+      document.getElementById("kpi-payable").textContent = formatMoney(payable);
+      document.getElementById("kpi-overdue").textContent = invoices.filter(isOverdue).length;
+    }
+
+    function renderTable() {
+      const body = document.getElementById("invoice-table-body");
+      const emptyMessage = document.getElementById("empty-message");
+
+      if (!state.filteredInvoices.length) {
+        body.innerHTML = "";
+        emptyMessage.hidden = false;
+        return;
+      }
+
+      emptyMessage.hidden = true;
+      body.innerHTML = state.filteredInvoices.map((invoice) => {
+        const outstanding = getOutstandingAmount(invoice);
+        const orderNumbers = (invoice.order_numbers || []).map(escapeHtml).join("<br>");
+
+        return `
+          <tr>
+            <td>${escapeHtml(invoice.invoice_number)}</td>
+            <td>${escapeHtml(invoice.document_type)}</td>
+            <td><div>${escapeHtml(invoice.buyer_name || "-")}</div><div class="muted">${escapeHtml(invoice.seller_name || "-")}</div></td>
+            <td class="amount">${formatMoney(invoice.amount_incl_tax)}</td>
+            <td class="amount"><div>${formatMoney(invoice.paid_amount)}</div><div class="muted">剩余：${formatMoney(outstanding)}</div></td>
+            <td>${escapeHtml(invoice.due_date || "待填写")}</td>
+            <td><span class="tag ${getStatusClass(invoice.payment_status)}">${escapeHtml(invoice.payment_status)}</span></td>
+            <td><span class="tag ${getStatusClass(invoice.review_status)}">${escapeHtml(invoice.review_status)}</span></td>
+            <td>${orderNumbers || "-"}</td>
+            <td><a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">更新</a></td>
+          </tr>
+        `;
+      }).join("");
+    }
+
+    function renderLedger() {
+      renderKpis();
+      renderTable();
+      document.getElementById("status-message").textContent = `当前展示 ${state.filteredInvoices.length} 条记录`;
+    }
+
+    async function loadInvoices() {
+      const statusMessage = document.getElementById("status-message");
+      statusMessage.textContent = "正在加载…";
+
+      try {
+        const response = await fetch("/api/invoices");
+        if (!response.ok) throw new Error(`台账请求失败：${response.status}`);
+
+        const result = await response.json();
+        state.invoices = result.items || [];
+        applyFilters();
+      } catch (error) {
+        console.error(error);
+        state.invoices = [];
+        state.filteredInvoices = [];
+        renderLedger();
+        statusMessage.textContent = "加载失败，请确认后端服务正在运行。";
+      }
+    }
+
+    document.getElementById("refresh-button").addEventListener("click", loadInvoices);
+    document.getElementById("logout-button").addEventListener("click", async () => {
+      await fetch("/api/auth/logout", { method: "POST" });
+      window.location.href = "/login";
+    });
+    document.getElementById("type-filter").addEventListener("change", applyFilters);
+    document.getElementById("status-filter").addEventListener("change", applyFilters);
+    document.getElementById("keyword-filter").addEventListener("input", applyFilters);
+    loadInvoices();
+  </script>
+</body>
+</html>

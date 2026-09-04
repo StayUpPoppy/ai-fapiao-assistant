@@ -1,0 +1,119 @@
+{
+  "title": "选择供应链台账助手的视觉方向",
+  "question": "三套方案都保留现有业务字段与流程。请选择最适合业务人员每天长时间使用的一套，或重抽一组。",
+  "options": [
+    {
+      "id": "assigned",
+      "label": "精密图纸台",
+      "kicker": "THE ROLL",
+      "lineage": "机械制图 × 工艺流转卡",
+      "thesis": "把订单与发票像零件一样编号、校验和追踪，让异常先浮出图纸。",
+      "palette": ["#F3F5F1", "#17211B", "#1F5B45", "#D06A3B", "#AAB5AC"],
+      "materials": ["制图纸网格", "阳极氧化金属标签"],
+      "viewport": "窄左侧导航固定工作区；中央是高密度单据队列；右侧待办轨道用连线显示订单—发票—账期关系，上传识别始终位于首屏右上。",
+      "risk": "线框和技术标注使用过量时，会让非技术岗位感到生硬。",
+      "raised": [
+        {
+          "from": "张力结构",
+          "raise": "关联订单与发票拥有可追踪的连接路径，而不是只显示一串编号。"
+        },
+        {
+          "from": "夜航仪表",
+          "raise": "账期变化在报警前先展示趋势，红色只留给真正需要处理的异常。"
+        },
+        {
+          "from": "单色桌面",
+          "raise": "按钮、选中、禁用和键盘焦点都有明确且一致的物理反馈。"
+        }
+      ],
+      "comp": ".impeccable/mocks/decision/precision-blueprint.png"
+    },
+    {
+      "id": "model-pick",
+      "label": "业务调度台",
+      "kicker": "IMPECCABLE’S PICK",
+      "lineage": "车间交接板 × 物流调度台",
+      "thesis": "首页不是报表集合，而是一张明确告诉业务员今天先做什么的工作台。",
+      "palette": ["#F2EFE7", "#17352D", "#E0A23A", "#C9533F", "#FFFFFF"],
+      "materials": ["班次交接板", "磁吸状态签"],
+      "viewport": "左侧稳定导航；顶部是今日工作量和全局搜索；主体按待复核、待收付款、临期三条任务泳道排列，下面保留可筛选的紧凑台账表。",
+      "risk": "当单据量非常大时，任务泳道必须与表格切换得当，否则首屏会偏忙。",
+      "comp": ".impeccable/mocks/decision/operations-dispatch.png"
+    },
+    {
+      "id": "challenger-wayfinding",
+      "label": "路标导向台",
+      "verdict": "competitive",
+      "lineage": "国际机场导视系统",
+      "thesis": "每个页面只突出当前选择和下一步动作，让复杂流程像换乘指引一样清楚。",
+      "palette": ["#FFCC00", "#0B0B0B", "#F3F3F1", "#FFFFFF", "#D8D8D4"],
+      "materials": ["悬挂导向牌", "黑色嵌入式标识块"],
+      "viewport": "黑色左侧导航配巨型当前任务编号；黄色只覆盖待办导向带和关键动作；表格保持白底，临期事项按下一站方式排列。",
+      "case": "下一步动作和异常辨识最强；长时间阅读超大表格时，安静程度略逊于精密图纸台。",
+      "risk": "黄色面积失控会过于刺激，因此只用于导航和待办，不作为普通卡片底色。",
+      "comp": ".impeccable/mocks/decision/wayfinding-ops.png",
+      "hero": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding-hero.webp",
+      "board": "https://impeccable.style/worlds/cards/wayfinding-cartography-signage-terminal-yellow-wayfinding.webp"
+    },
+    {
+      "id": "challenger-tensegrity",
+      "label": "张力关系网",
+      "verdict": "declined",
+      "lineage": "张拉整体结构",
+      "thesis": "用受力关系表达订单、发票与付款之间的约束。",
+      "palette": ["#E8E7E2", "#171918", "#C83B32", "#9A9D99"],
+      "materials": ["碳黑杆件", "红色张力线"],
+      "viewport": "关联网络成为主画面，单据沿约束路径展开。",
+      "case": "与弹簧和关联关系有关联，但不符合业务人员以表格和待办完成工作的习惯。",
+      "kept": "精密图纸台保留了它的关系追踪纪律。",
+      "risk": "视觉关系图会挤占台账和操作空间。",
+      "hero": "https://impeccable.style/worlds/cards/kinetic-sculpture-automata-tensegrity-breathing-column-hero.webp"
+    },
+    {
+      "id": "challenger-six-pack",
+      "label": "夜航仪表",
+      "verdict": "declined",
+      "lineage": "小型飞机夜航六联仪表",
+      "thesis": "每个仪表只负责一个关键事实，以交叉检查建立信任。",
+      "palette": ["#0B0D0F", "#F2F5F2", "#39FF9A", "#FFB000", "#FF3B30"],
+      "materials": ["哑黑仪表板", "夜光刻度"],
+      "viewport": "六个状态仪表占据首屏，异常灯位于右侧。",
+      "case": "状态纪律很强，但办公室白天使用和中文密集表格都不适合全暗界面。",
+      "kept": "精密图纸台吸收了趋势先于报警的原则。",
+      "risk": "长期使用容易视觉疲劳，并削弱真实单据的可读性。",
+      "hero": "https://impeccable.style/worlds/cards/signals-instruments-night-flight-six-pack-hero.webp"
+    },
+    {
+      "id": "challenger-one-bit",
+      "label": "单色业务桌面",
+      "verdict": "declined",
+      "lineage": "早期单色图形桌面",
+      "thesis": "所有状态依靠黑白反转、像素图案和窗口层级表达。",
+      "palette": ["#FFFFFF", "#000000", "#B7B7B7"],
+      "materials": ["单色像素", "一像素窗口边框"],
+      "viewport": "订单、发票和识别结果以重叠窗口呈现。",
+      "case": "操作反馈明确，但中文字体、可访问性和现代办公认知成本不符合项目实际。",
+      "kept": "主方案继承明确的按压、选中和禁用状态。",
+      "risk": "复古形式会压过业务内容。",
+      "hero": "https://impeccable.style/worlds/cards/medium-native-one-bit-desktop-hero.webp"
+    }
+  ],
+  "reroll": {
+    "registers": ["safer", "bolder"]
+  },
+  "buildPath": {
+    "value": "comp",
+    "toggle": true
+  },
+  "canon": true,
+  "canonCard": {
+    "label": "标准企业后台",
+    "thesis": "熟悉的左侧导航、指标卡片和数据表格，以成熟企业软件方式完成。",
+    "palette": ["#FFFFFF", "#111827", "#2563EB", "#F1F5F9"],
+    "materials": ["干净栅格", "标准数据卡片"],
+    "viewport": "左侧导航，顶部标题与操作区，四张指标卡，提醒列表和完整台账表。",
+    "risk": "学习成本最低，但与常见后台产品难以区分。",
+    "comp": ".impeccable/mocks/decision/canon-dashboard.png"
+  },
+  "steer": true
+}

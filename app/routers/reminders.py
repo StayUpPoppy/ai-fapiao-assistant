@@ -12,7 +12,14 @@ from app.services.reminders import (
     run_daily_dingtalk_reminders_service,
     validate_reminder_range
 )
-
+from app.schemas import ReminderSettingsUpdate
+from app.services.reminder_settings import (
+    get_reminder_settings,
+    update_reminder_settings,
+)
+from app.services.scheduler import (
+    apply_reminder_settings,
+)
 
 router = APIRouter(tags=["账期提醒"])
 
@@ -107,24 +114,71 @@ async def run_daily_dingtalk_reminders():
 
 @router.get("/api/scheduler/status")
 def get_scheduler_status(request: Request):
+    settings = get_reminder_settings()
     scheduler = getattr(
         request.app.state,
         "reminder_scheduler",
-        None
+        None,
     )
+
     if scheduler is None:
         return {
             "running": False,
-            "message": "提醒调度器尚未启动。"
+            "enabled": settings["enabled"],
+            "job_active": False,
+            "next_run_time": None,
+            "message": "系统级提醒调度器尚未启动。",
         }
 
     job = scheduler.get_job(REMINDER_JOB_ID)
+
     return {
         "running": scheduler.running,
+        "enabled": settings["enabled"],
+        "job_active": job is not None,
         "job_id": REMINDER_JOB_ID,
         "next_run_time": (
             job.next_run_time.isoformat()
             if job and job.next_run_time
             else None
+        ),
+    }
+@router.get("/api/reminder-settings")
+def read_reminder_settings():
+    return get_reminder_settings()
+
+
+@router.put("/api/reminder-settings")
+async def save_reminder_settings(
+    settings: ReminderSettingsUpdate,
+    request: Request,
+):
+    saved_settings = update_reminder_settings(
+        enabled=settings.enabled,
+        reminder_hour=settings.reminder_hour,
+        reminder_minute=settings.reminder_minute,
+        days_before=settings.days_before,
+    )
+
+    scheduler = getattr(
+        request.app.state,
+        "reminder_scheduler",
+        None,
+    )
+
+    next_run_time = None
+
+    if scheduler is not None:
+        next_run_time = apply_reminder_settings(
+            scheduler,
+            saved_settings,
         )
+
+    return {
+        **saved_settings,
+        "scheduler_running": (
+            scheduler is not None
+            and scheduler.running
+        ),
+        "next_run_time": next_run_time,
     }
