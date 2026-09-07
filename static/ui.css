@@ -606,10 +606,6 @@ body.app-page .action-link {
 body.app-page .empty { padding: 48px; color: var(--ui-text-muted); }
 
 /* 台账记录详情检查器 */
-body.app-page .page {
-  transition: width 180ms ease-out;
-}
-
 body.app-page.inspector-open .page {
   width: calc(100% - var(--record-inspector-width));
 }
@@ -813,11 +809,36 @@ body.app-page .inspector-raw-text {
 
 body.app-page .inspector-footer {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   padding: 14px 20px;
   border-top: 1px solid var(--ui-border);
   background: #fff;
+}
+
+body.app-page .inspector-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+body.app-page .inspector-primary-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 8px;
+  width: min(300px, 100%);
+}
+
+body.app-page button.inspector-delete {
+  color: var(--ui-danger);
+  border-color: #efb3b3;
+  background: #fff;
+}
+
+body.app-page button.inspector-delete:hover {
+  color: #b72f2f;
+  border-color: #dc7777;
+  background: var(--ui-danger-soft);
 }
 
 body.app-page .inspector-edit {
@@ -844,6 +865,80 @@ body.app-page .inspector-feedback {
 body.app-page .inspector-feedback[data-type="success"] { color: #087c69; }
 body.app-page .inspector-feedback[data-type="error"] { color: #c93e3e; }
 
+body.app-page dialog.delete-dialog {
+  width: min(440px, calc(100% - 40px));
+  padding: 0;
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 24px 70px rgba(20, 33, 55, 0.2);
+}
+
+body.app-page dialog.delete-dialog::backdrop {
+  background: rgba(23, 32, 51, 0.42);
+}
+
+body.app-page .delete-dialog-body { padding: 24px; }
+
+body.app-page .delete-dialog-body h2 {
+  margin: 0;
+  color: var(--ui-text);
+  font-size: 18px;
+  letter-spacing: -0.2px;
+}
+
+body.app-page .delete-dialog-body p {
+  margin: 12px 0 0;
+  color: var(--ui-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+body.app-page .delete-dialog-body strong {
+  color: var(--ui-text);
+  overflow-wrap: anywhere;
+}
+
+body.app-page .delete-dialog-body .delete-dialog-warning {
+  color: #a83434;
+}
+
+body.app-page .delete-dialog-feedback {
+  min-height: 20px;
+  color: var(--ui-danger) !important;
+}
+
+body.app-page .delete-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 20px;
+}
+
+body.app-page button.delete-cancel {
+  color: var(--ui-text);
+  border-color: var(--ui-border-strong);
+  background: #fff;
+}
+
+body.app-page button.delete-cancel:hover {
+  color: var(--ui-text);
+  border-color: #b9c5d5;
+  background: var(--ui-surface-soft);
+}
+
+body.app-page button.delete-confirm {
+  color: #fff;
+  border-color: var(--ui-danger);
+  background: var(--ui-danger);
+}
+
+body.app-page button.delete-confirm:hover {
+  border-color: #bd3434;
+  background: #bd3434;
+}
+
 /* 工作台：全局概览与待处理入口 */
 body.app-page .work-snapshot {
   display: grid;
@@ -862,6 +957,41 @@ body.app-page .snapshot-item {
   color: inherit;
   border-right: 1px solid var(--ui-border);
   text-decoration: none;
+}
+
+body.app-page .table-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+body.app-page button.row-delete-button {
+  display: inline-grid;
+  flex: none;
+  width: 30px;
+  min-height: 30px;
+  padding: 0;
+  place-items: center;
+  color: var(--ui-danger);
+  border-color: transparent;
+  background: transparent;
+}
+
+body.app-page button.row-delete-button:hover {
+  color: #b72f2f;
+  border-color: #efb3b3;
+  background: var(--ui-danger-soft);
+}
+
+body.app-page .row-delete-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
 }
 
 body.app-page .snapshot-item:last-child { border-right: 0; }

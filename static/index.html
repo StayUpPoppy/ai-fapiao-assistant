@@ -196,9 +196,30 @@
     </section>
   </main>
 
+  <dialog id="workspace-delete-dialog" class="delete-dialog" aria-labelledby="workspace-delete-title">
+    <div class="delete-dialog-body">
+      <h2 id="workspace-delete-title">删除这条记录？</h2>
+      <p id="workspace-delete-description">
+        该记录将从本系统中删除，同时清除相关联的业务记录。
+      </p>
+      <p class="delete-dialog-warning">此操作不可恢复，已经发送到钉钉的消息不会撤回。</p>
+      <p id="workspace-delete-feedback" class="delete-dialog-feedback" role="status" aria-live="polite"></p>
+      <div class="delete-dialog-actions">
+        <button id="workspace-delete-cancel" class="delete-cancel" type="button">取消</button>
+        <button id="workspace-delete-confirm" class="delete-confirm" type="button">确认删除</button>
+      </div>
+    </div>
+  </dialog>
+
   <script src="/static/ui.js"></script>
   <script>
-    const state = { invoices: [], orders: [], reminders: [], reminderMeta: {} };
+    const state = {
+      invoices: [],
+      orders: [],
+      reminders: [],
+      reminderMeta: {},
+      pendingDelete: null
+    };
     const currencyFormatter = new Intl.NumberFormat("zh-CN", {
       style: "currency",
       currency: "CNY",
@@ -207,6 +228,14 @@
 
     function formatMoney(value) {
       return currencyFormatter.format(Number(value || 0));
+    }
+
+    function deleteIcon() {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"></path>
+        </svg>
+      `;
     }
 
     function escapeHtml(value) {
@@ -457,7 +486,18 @@
           <td><span class="tag ${getStatusClass(invoice.payment_status)}">${escapeHtml(invoice.payment_status)}</span></td>
           <td>${escapeHtml(invoice.due_date || "待填写")}</td>
           <td class="muted">${escapeHtml(formatUploadedAt(invoice.created_at))}</td>
-          <td><a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">更新</a></td>
+          <td>
+            <div class="table-row-actions">
+              <button
+                class="row-delete-button"
+                type="button"
+                data-delete-invoice-id="${Number(invoice.id)}"
+                aria-label="删除发票 ${escapeHtml(invoice.invoice_number || "未编号发票")}"
+                title="删除"
+              >${deleteIcon()}</button>
+              <a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">编辑</a>
+            </div>
+          </td>
         </tr>
       `).join("");
     }
@@ -483,9 +523,89 @@
           <td><span class="tag ${getStatusClass(order.invoice_status)}">${escapeHtml(order.invoice_status)}</span></td>
           <td><span class="tag ${getStatusClass(order.payment_status)}">${escapeHtml(order.payment_status)}</span></td>
           <td class="muted">${escapeHtml(formatUploadedAt(order.created_at))}</td>
-          <td><a class="table-action" href="/static/order-edit.html?id=${Number(order.id)}">更新</a></td>
+          <td>
+            <div class="table-row-actions">
+              <button
+                class="row-delete-button"
+                type="button"
+                data-delete-order-id="${Number(order.id)}"
+                aria-label="删除订单 ${escapeHtml(order.order_number || "未编号订单")}"
+                title="删除"
+              >${deleteIcon()}</button>
+              <a class="table-action" href="/static/order-edit.html?id=${Number(order.id)}">编辑</a>
+            </div>
+          </td>
         </tr>
       `).join("");
+    }
+
+    function openWorkspaceDeleteDialog(kind, recordId) {
+      const normalizedId = Number(recordId);
+      const isInvoice = kind === "invoice";
+      const records = isInvoice ? state.invoices : state.orders;
+      const record = records.find((item) => Number(item.id) === normalizedId);
+      if (!record) return;
+
+      const recordType = isInvoice ? "发票" : "订单";
+      const recordNumber = isInvoice
+        ? record.invoice_number || "未编号发票"
+        : record.order_number || "未编号订单";
+
+      state.pendingDelete = { kind, id: normalizedId, number: recordNumber };
+      document.getElementById("workspace-delete-title").textContent = `删除这张${recordType}？`;
+      document.getElementById("workspace-delete-description").innerHTML =
+        `${recordType} <strong>${escapeHtml(recordNumber)}</strong> 将从本系统中删除，同时清除相关联的业务记录。`;
+      document.getElementById("workspace-delete-feedback").textContent = "";
+
+      const confirmButton = document.getElementById("workspace-delete-confirm");
+      confirmButton.disabled = false;
+      confirmButton.textContent = "确认删除";
+
+      document.getElementById("workspace-delete-dialog").showModal();
+      document.getElementById("workspace-delete-cancel").focus();
+    }
+
+    function closeWorkspaceDeleteDialog() {
+      const dialog = document.getElementById("workspace-delete-dialog");
+      if (dialog.open) dialog.close();
+      state.pendingDelete = null;
+    }
+
+    async function deleteWorkspaceRecord() {
+      const pendingDelete = state.pendingDelete;
+      if (!pendingDelete) return;
+
+      const isInvoice = pendingDelete.kind === "invoice";
+      const recordType = isInvoice ? "发票" : "订单";
+      const endpoint = isInvoice ? "invoices" : "orders";
+      const confirmButton = document.getElementById("workspace-delete-confirm");
+      const feedback = document.getElementById("workspace-delete-feedback");
+
+      confirmButton.disabled = true;
+      confirmButton.textContent = "正在删除…";
+      feedback.textContent = `正在删除${recordType}及其关联记录…`;
+
+      try {
+        const response = await fetch(`/api/${endpoint}/${pendingDelete.id}`, {
+          method: "DELETE"
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof result.detail === "string" ? result.detail : `删除${recordType}失败。`
+          );
+        }
+
+        const deletedNumber = pendingDelete.number;
+        closeWorkspaceDeleteDialog();
+        await loadWorkspace();
+        document.getElementById("work-status").textContent =
+          `${recordType} ${deletedNumber} 已删除。`;
+      } catch (error) {
+        feedback.textContent = error.message;
+        confirmButton.disabled = false;
+        confirmButton.textContent = "重新删除";
+      }
     }
 
     async function loadWorkspace() {
@@ -538,6 +658,16 @@
       window.location.href = "/login";
     });
     document.getElementById("reminder-days").addEventListener("change", loadWorkspace);
+    document.getElementById("workspace-invoice-body").addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-invoice-id]");
+      if (deleteButton) openWorkspaceDeleteDialog("invoice", deleteButton.dataset.deleteInvoiceId);
+    });
+    document.getElementById("workspace-order-body").addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-order-id]");
+      if (deleteButton) openWorkspaceDeleteDialog("order", deleteButton.dataset.deleteOrderId);
+    });
+    document.getElementById("workspace-delete-cancel").addEventListener("click", closeWorkspaceDeleteDialog);
+    document.getElementById("workspace-delete-confirm").addEventListener("click", deleteWorkspaceRecord);
     document.getElementById("reminder-settings-toggle").addEventListener("click", () => {
       const panel = document.getElementById("reminder-settings-panel");
       const toggle = document.getElementById("reminder-settings-toggle");

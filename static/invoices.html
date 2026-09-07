@@ -113,19 +113,40 @@
       </header>
       <div id="invoice-inspector-content" class="inspector-content"></div>
       <footer class="inspector-footer">
-        <a id="invoice-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
-        <button id="invoice-inspector-confirm" type="button">确认无误</button>
+        <div class="inspector-footer-actions">
+          <button id="invoice-inspector-delete" class="inspector-delete" type="button">删除</button>
+          <div class="inspector-primary-actions">
+            <a id="invoice-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
+            <button id="invoice-inspector-confirm" type="button">确认无误</button>
+          </div>
+        </div>
         <p id="invoice-inspector-feedback" class="inspector-feedback" role="status" aria-live="polite"></p>
       </footer>
     </aside>
   </main>
+
+  <dialog id="invoice-delete-dialog" class="delete-dialog" aria-labelledby="invoice-delete-title">
+    <div class="delete-dialog-body">
+      <h2 id="invoice-delete-title">删除这张发票？</h2>
+      <p>
+        发票 <strong id="invoice-delete-record"></strong> 将从本系统中删除，同时清除订单关联和提醒发送记录。
+      </p>
+      <p class="delete-dialog-warning">此操作不可恢复，已经发送到钉钉的消息不会撤回。</p>
+      <p id="invoice-delete-feedback" class="delete-dialog-feedback" role="status" aria-live="polite"></p>
+      <div class="delete-dialog-actions">
+        <button id="invoice-delete-cancel" class="delete-cancel" type="button">取消</button>
+        <button id="invoice-delete-confirm" class="delete-confirm" type="button">确认删除</button>
+      </div>
+    </div>
+  </dialog>
 
   <script src="/static/ui.js"></script>
   <script>
     const state = {
       invoices: [],
       filteredInvoices: [],
-      selectedInvoiceId: null
+      selectedInvoiceId: null,
+      pendingDeleteInvoiceId: null
     };
     const currencyFormatter = new Intl.NumberFormat("zh-CN", {
       style: "currency",
@@ -135,6 +156,14 @@
 
     function formatMoney(value) {
       return currencyFormatter.format(Number(value || 0));
+    }
+
+    function deleteIcon() {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"></path>
+        </svg>
+      `;
     }
 
     function escapeHtml(value) {
@@ -249,7 +278,18 @@
             <td><span class="tag ${getStatusClass(invoice.payment_status)}">${escapeHtml(invoice.payment_status)}</span></td>
             <td><span class="tag ${getStatusClass(invoice.review_status)}">${escapeHtml(invoice.review_status)}</span></td>
             <td>${orderNumbers || "-"}</td>
-            <td><a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">更新</a></td>
+            <td>
+              <div class="table-row-actions">
+                <button
+                  class="row-delete-button"
+                  type="button"
+                  data-delete-invoice-id="${Number(invoice.id)}"
+                  aria-label="删除发票 ${escapeHtml(invoice.invoice_number || "未编号发票")}"
+                  title="删除"
+                >${deleteIcon()}</button>
+                <a class="table-action" href="/static/edit.html?id=${Number(invoice.id)}">编辑</a>
+              </div>
+            </td>
           </tr>
         `;
       }).join("");
@@ -400,6 +440,73 @@
       }
     }
 
+    function openInvoiceDeleteDialog(invoiceId = state.selectedInvoiceId) {
+      const normalizedInvoiceId = Number(invoiceId);
+      const invoice = state.invoices.find(
+        (item) => Number(item.id) === normalizedInvoiceId
+      );
+      if (!invoice) return;
+
+      state.pendingDeleteInvoiceId = normalizedInvoiceId;
+
+      document.getElementById("invoice-delete-record").textContent =
+        invoice.invoice_number || "未编号发票";
+      document.getElementById("invoice-delete-feedback").textContent = "";
+
+      const confirmButton = document.getElementById("invoice-delete-confirm");
+      confirmButton.disabled = false;
+      confirmButton.textContent = "确认删除";
+
+      document.getElementById("invoice-delete-dialog").showModal();
+      document.getElementById("invoice-delete-cancel").focus();
+    }
+
+    function closeInvoiceDeleteDialog() {
+      const dialog = document.getElementById("invoice-delete-dialog");
+      if (dialog.open) dialog.close();
+      state.pendingDeleteInvoiceId = null;
+    }
+
+    async function deleteInvoice() {
+      const deleteInvoiceId = state.pendingDeleteInvoiceId;
+      if (deleteInvoiceId === null) return;
+
+      const invoice = state.invoices.find(
+        (item) => Number(item.id) === deleteInvoiceId
+      );
+      if (!invoice) return;
+
+      const confirmButton = document.getElementById("invoice-delete-confirm");
+      const feedback = document.getElementById("invoice-delete-feedback");
+      confirmButton.disabled = true;
+      confirmButton.textContent = "正在删除…";
+      feedback.textContent = "正在删除发票及其关联记录…";
+
+      try {
+        const response = await fetch(`/api/invoices/${deleteInvoiceId}`, {
+          method: "DELETE"
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof result.detail === "string" ? result.detail : "删除发票失败。"
+          );
+        }
+
+        const deletedNumber = invoice.invoice_number || "未编号发票";
+        const inspectorShowsDeletedInvoice = state.selectedInvoiceId === deleteInvoiceId;
+        closeInvoiceDeleteDialog();
+        if (inspectorShowsDeletedInvoice) closeInvoiceInspector();
+        await loadInvoices();
+        document.getElementById("status-message").textContent =
+          `发票 ${deletedNumber} 已删除。`;
+      } catch (error) {
+        feedback.textContent = error.message;
+        confirmButton.disabled = false;
+        confirmButton.textContent = "重新删除";
+      }
+    }
+
     function renderLedger() {
       renderKpis();
       renderTable();
@@ -435,6 +542,11 @@
     document.getElementById("status-filter").addEventListener("change", applyFilters);
     document.getElementById("keyword-filter").addEventListener("input", applyFilters);
     document.getElementById("invoice-table-body").addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-invoice-id]");
+      if (deleteButton) {
+        openInvoiceDeleteDialog(deleteButton.dataset.deleteInvoiceId);
+        return;
+      }
       if (event.target.closest("a, button")) return;
       const row = event.target.closest("[data-invoice-id]");
       if (row) openInvoiceInspector(row.dataset.invoiceId);
@@ -448,8 +560,14 @@
     });
     document.getElementById("invoice-inspector-close").addEventListener("click", closeInvoiceInspector);
     document.getElementById("invoice-inspector-confirm").addEventListener("click", confirmInvoice);
+    document.getElementById("invoice-inspector-delete").addEventListener("click", () => openInvoiceDeleteDialog());
+    document.getElementById("invoice-delete-cancel").addEventListener("click", closeInvoiceDeleteDialog);
+    document.getElementById("invoice-delete-confirm").addEventListener("click", deleteInvoice);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.selectedInvoiceId !== null) closeInvoiceInspector();
+      const deleteDialogOpen = document.getElementById("invoice-delete-dialog").open;
+      if (event.key === "Escape" && state.selectedInvoiceId !== null && !deleteDialogOpen) {
+        closeInvoiceInspector();
+      }
     });
     loadInvoices();
   </script>

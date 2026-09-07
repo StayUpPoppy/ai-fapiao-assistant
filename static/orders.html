@@ -466,12 +466,32 @@
       </header>
       <div id="order-inspector-content" class="inspector-content"></div>
       <footer class="inspector-footer">
-        <a id="order-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
-        <button id="order-inspector-confirm" type="button">确认无误</button>
+        <div class="inspector-footer-actions">
+          <button id="order-inspector-delete" class="inspector-delete" type="button">删除</button>
+          <div class="inspector-primary-actions">
+            <a id="order-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
+            <button id="order-inspector-confirm" type="button">确认无误</button>
+          </div>
+        </div>
         <p id="order-inspector-feedback" class="inspector-feedback" role="status" aria-live="polite"></p>
       </footer>
     </aside>
   </main>
+
+  <dialog id="order-delete-dialog" class="delete-dialog" aria-labelledby="order-delete-title">
+    <div class="delete-dialog-body">
+      <h2 id="order-delete-title">删除这张订单？</h2>
+      <p>
+        订单 <strong id="order-delete-record"></strong> 将从本系统中删除，同时清除匹配的发票关联和提醒发送记录。
+      </p>
+      <p class="delete-dialog-warning">此操作不可恢复，已经发送到钉钉的消息不会撤回。</p>
+      <p id="order-delete-feedback" class="delete-dialog-feedback" role="status" aria-live="polite"></p>
+      <div class="delete-dialog-actions">
+        <button id="order-delete-cancel" class="delete-cancel" type="button">取消</button>
+        <button id="order-delete-confirm" class="delete-confirm" type="button">确认删除</button>
+      </div>
+    </div>
+  </dialog>
 
   <dialog id="order-dialog">
     <div class="dialog-header">
@@ -605,6 +625,7 @@
       orders: [],
       filteredOrders: [],
       selectedOrderId: null,
+      pendingDeleteOrderId: null,
       draftSourceFilename: null,
       draftRawDifyOutput: {}
     };
@@ -617,6 +638,14 @@
 
     function formatMoney(value) {
       return moneyFormatter.format(Number(value || 0));
+    }
+
+    function deleteIcon() {
+      return `
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"></path>
+        </svg>
+      `;
     }
 
     function escapeHtml(value) {
@@ -753,10 +782,19 @@
             </td>
             <td>${escapeHtml(order.owner || "待分配")}</td>
             <td>
-              <a
-                class="action-link"
-                href="/static/order-edit.html?id=${encodeURIComponent(order.id)}"
-              >编辑</a>
+              <div class="table-row-actions">
+                <button
+                  class="row-delete-button"
+                  type="button"
+                  data-delete-order-id="${Number(order.id)}"
+                  aria-label="删除订单 ${escapeHtml(order.order_number || "未编号订单")}"
+                  title="删除"
+                >${deleteIcon()}</button>
+                <a
+                  class="action-link"
+                  href="/static/order-edit.html?id=${encodeURIComponent(order.id)}"
+                >编辑</a>
+              </div>
             </td>
           </tr>
         `;
@@ -897,6 +935,73 @@
       } catch (error) {
         button.disabled = false;
         setOrderInspectorFeedback(error.message, "error");
+      }
+    }
+
+    function openOrderDeleteDialog(orderId = state.selectedOrderId) {
+      const normalizedOrderId = Number(orderId);
+      const order = state.orders.find(
+        (item) => Number(item.id) === normalizedOrderId
+      );
+      if (!order) return;
+
+      state.pendingDeleteOrderId = normalizedOrderId;
+
+      document.getElementById("order-delete-record").textContent =
+        order.order_number || "未编号订单";
+      document.getElementById("order-delete-feedback").textContent = "";
+
+      const confirmButton = document.getElementById("order-delete-confirm");
+      confirmButton.disabled = false;
+      confirmButton.textContent = "确认删除";
+
+      document.getElementById("order-delete-dialog").showModal();
+      document.getElementById("order-delete-cancel").focus();
+    }
+
+    function closeOrderDeleteDialog() {
+      const dialog = document.getElementById("order-delete-dialog");
+      if (dialog.open) dialog.close();
+      state.pendingDeleteOrderId = null;
+    }
+
+    async function deleteOrder() {
+      const deleteOrderId = state.pendingDeleteOrderId;
+      if (deleteOrderId === null) return;
+
+      const order = state.orders.find(
+        (item) => Number(item.id) === deleteOrderId
+      );
+      if (!order) return;
+
+      const confirmButton = document.getElementById("order-delete-confirm");
+      const feedback = document.getElementById("order-delete-feedback");
+      confirmButton.disabled = true;
+      confirmButton.textContent = "正在删除…";
+      feedback.textContent = "正在删除订单及其关联记录…";
+
+      try {
+        const response = await fetch(`/api/orders/${deleteOrderId}`, {
+          method: "DELETE"
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(
+            typeof result.detail === "string" ? result.detail : "删除订单失败。"
+          );
+        }
+
+        const deletedNumber = order.order_number || "未编号订单";
+        const inspectorShowsDeletedOrder = state.selectedOrderId === deleteOrderId;
+        closeOrderDeleteDialog();
+        if (inspectorShowsDeletedOrder) closeOrderInspector();
+        await loadOrders();
+        document.getElementById("status-message").textContent =
+          `订单 ${deletedNumber} 已删除。`;
+      } catch (error) {
+        feedback.textContent = error.message;
+        confirmButton.disabled = false;
+        confirmButton.textContent = "重新删除";
       }
     }
 
@@ -1189,6 +1294,11 @@
     document.getElementById("invoice-filter").addEventListener("change", applyFilters);
     document.getElementById("keyword-filter").addEventListener("input", applyFilters);
     document.getElementById("order-table-body").addEventListener("click", (event) => {
+      const deleteButton = event.target.closest("[data-delete-order-id]");
+      if (deleteButton) {
+        openOrderDeleteDialog(deleteButton.dataset.deleteOrderId);
+        return;
+      }
       if (event.target.closest("a, button")) return;
       const row = event.target.closest("[data-order-id]");
       if (row) openOrderInspector(row.dataset.orderId);
@@ -1202,8 +1312,14 @@
     });
     document.getElementById("order-inspector-close").addEventListener("click", closeOrderInspector);
     document.getElementById("order-inspector-confirm").addEventListener("click", confirmOrder);
+    document.getElementById("order-inspector-delete").addEventListener("click", () => openOrderDeleteDialog());
+    document.getElementById("order-delete-cancel").addEventListener("click", closeOrderDeleteDialog);
+    document.getElementById("order-delete-confirm").addEventListener("click", deleteOrder);
     document.addEventListener("keydown", (event) => {
-      if (event.key === "Escape" && state.selectedOrderId !== null) closeOrderInspector();
+      const deleteDialogOpen = document.getElementById("order-delete-dialog").open;
+      if (event.key === "Escape" && state.selectedOrderId !== null && !deleteDialogOpen) {
+        closeOrderInspector();
+      }
     });
 
     loadOrders();

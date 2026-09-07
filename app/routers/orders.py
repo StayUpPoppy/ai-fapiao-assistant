@@ -4,6 +4,7 @@ from app.schemas import OrderCreate, OrderUpdate
 from app.services.ledger import (
     create_order_record,
     list_order_records,
+    delete_order_record,
     update_order_record
 )
 
@@ -28,3 +29,6 @@ def update_order(
     order_update: OrderUpdate
 ):
     return update_order_record(order_id, order_update)
+@router.delete("/{order_id}")
+def delete_order(order_id: int):
+    return delete_order_record(order_id)

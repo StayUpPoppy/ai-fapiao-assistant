@@ -493,3 +493,129 @@ def update_order_record(
         "payment_status": payment_status,
         "message": "订单台账已更新。"
     }
+def delete_invoice_record(invoice_id: int) -> dict:
+    with closing(get_db_connection()) as connection:
+        existing = connection.execute(
+            """
+            SELECT invoice_number
+            FROM invoices
+            WHERE id = ?
+            """,
+            (invoice_id,)
+        ).fetchone()
+
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail="未找到该发票台账。"
+            )
+
+        try:
+            # 先删除该发票的通知去重记录
+            connection.execute(
+                """
+                DELETE FROM notification_logs
+                WHERE invoice_id = ?
+                """,
+                (invoice_id,)
+            )
+
+            # 再删除发票与订单的关联
+            connection.execute(
+                """
+                DELETE FROM invoice_order_links
+                WHERE invoice_id = ?
+                """,
+                (invoice_id,)
+            )
+
+            # 最后删除发票主记录
+            connection.execute(
+                """
+                DELETE FROM invoices
+                WHERE id = ?
+                """,
+                (invoice_id,)
+            )
+
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+
+    return {
+        "id": invoice_id,
+        "invoice_number": existing["invoice_number"],
+        "message": "发票及其关联记录已彻底删除。"
+    }
+
+
+def delete_order_record(order_id: int) -> dict:
+    with closing(get_db_connection()) as connection:
+        existing = connection.execute(
+            """
+            SELECT order_number, order_type
+            FROM orders
+            WHERE id = ?
+            """,
+            (order_id,)
+        ).fetchone()
+
+        if existing is None:
+            raise HTTPException(
+                status_code=404,
+                detail="未找到该订单台账。"
+            )
+
+        invoice_document_type = (
+            "销售发票"
+            if existing["order_type"] == "销售订单"
+            else "采购发票"
+        )
+
+        try:
+            # 删除该订单的通知去重记录
+            connection.execute(
+                """
+                DELETE FROM order_notification_logs
+                WHERE order_id = ?
+                """,
+                (order_id,)
+            )
+
+            # 删除同一业务方向下的发票关联
+            connection.execute(
+                """
+                DELETE FROM invoice_order_links
+                WHERE order_number = ?
+                  AND invoice_id IN (
+                      SELECT id
+                      FROM invoices
+                      WHERE document_type = ?
+                  )
+                """,
+                (
+                    existing["order_number"],
+                    invoice_document_type
+                )
+            )
+
+            # 删除订单主记录
+            connection.execute(
+                """
+                DELETE FROM orders
+                WHERE id = ?
+                """,
+                (order_id,)
+            )
+
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+
+    return {
+        "id": order_id,
+        "order_number": existing["order_number"],
+        "message": "订单及其关联记录已彻底删除。"
+    }
