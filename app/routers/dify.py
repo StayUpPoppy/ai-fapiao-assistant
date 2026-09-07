@@ -73,13 +73,25 @@ async def extract_order(
         )
 
     content_type = (
-        order_file.content_type
-        or "application/octet-stream"
+            order_file.content_type
+            or "application/octet-stream"
     )
-    if not content_type.startswith("image/"):
+
+    filename = order_file.filename or ""
+    is_pdf = (
+            content_type == "application/pdf"
+            or filename.lower().endswith(".pdf")
+    )
+
+    if content_type.startswith("image/"):
+        file_type = "image"
+    elif is_pdf:
+        content_type = "application/pdf"
+        file_type = "document"
+    else:
         raise HTTPException(
             status_code=400,
-            detail="当前订单智能识别只支持 PNG、JPG 等图片文件。"
+            detail="当前订单智能识别只支持 PNG、JPG、WEBP 和 PDF 文件。"
         )
 
     file_content = await order_file.read()
@@ -94,7 +106,7 @@ async def extract_order(
         filename=order_file.filename,
         content_type=content_type,
         file_content=file_content,
-        file_type="image",
+        file_type=file_type,
         file_variable="order_file",
         inputs={"order_type": order_type}
     )

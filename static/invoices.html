@@ -102,11 +102,31 @@
 
       <div id="empty-message" class="empty" hidden>暂无符合条件的发票记录。</div>
     </section>
+
+    <aside id="invoice-inspector" class="record-inspector" aria-labelledby="invoice-inspector-title" hidden>
+      <header class="inspector-header">
+        <div class="inspector-heading">
+          <div id="invoice-inspector-type" class="inspector-kicker">发票详情</div>
+          <h2 id="invoice-inspector-title">发票详情</h2>
+        </div>
+        <button id="invoice-inspector-close" class="inspector-close" type="button">关闭</button>
+      </header>
+      <div id="invoice-inspector-content" class="inspector-content"></div>
+      <footer class="inspector-footer">
+        <a id="invoice-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
+        <button id="invoice-inspector-confirm" type="button">确认无误</button>
+        <p id="invoice-inspector-feedback" class="inspector-feedback" role="status" aria-live="polite"></p>
+      </footer>
+    </aside>
   </main>
 
   <script src="/static/ui.js"></script>
   <script>
-    const state = { invoices: [], filteredInvoices: [] };
+    const state = {
+      invoices: [],
+      filteredInvoices: [],
+      selectedInvoiceId: null
+    };
     const currencyFormatter = new Intl.NumberFormat("zh-CN", {
       style: "currency",
       currency: "CNY",
@@ -174,6 +194,13 @@
       });
 
       renderLedger();
+
+      if (
+        state.selectedInvoiceId !== null &&
+        !state.filteredInvoices.some((invoice) => Number(invoice.id) === state.selectedInvoiceId)
+      ) {
+        closeInvoiceInspector();
+      }
     }
 
     function renderKpis() {
@@ -207,7 +234,12 @@
         const orderNumbers = (invoice.order_numbers || []).map(escapeHtml).join("<br>");
 
         return `
-          <tr>
+          <tr
+            class="record-row ${Number(invoice.id) === state.selectedInvoiceId ? "is-selected" : ""}"
+            data-invoice-id="${Number(invoice.id)}"
+            tabindex="0"
+            aria-label="查看发票 ${escapeHtml(invoice.invoice_number)} 的详细信息"
+          >
             <td>${escapeHtml(invoice.invoice_number)}</td>
             <td>${escapeHtml(invoice.document_type)}</td>
             <td><div>${escapeHtml(invoice.buyer_name || "-")}</div><div class="muted">${escapeHtml(invoice.seller_name || "-")}</div></td>
@@ -221,6 +253,151 @@
           </tr>
         `;
       }).join("");
+    }
+
+    function formatDateTime(value) {
+      return value ? String(value).replace("T", " ").slice(0, 16) : "-";
+    }
+
+    function invoiceParty(invoice) {
+      return invoice.document_type === "销售发票"
+        ? invoice.buyer_name
+        : invoice.seller_name;
+    }
+
+    function renderInvoiceInspector(invoice) {
+      const outstanding = getOutstandingAmount(invoice);
+      const paymentLabel = invoice.document_type === "销售发票" ? "累计收款" : "累计付款";
+      const balanceLabel = invoice.document_type === "销售发票" ? "待收款" : "待付款";
+      const orderNumbers = invoice.order_numbers || [];
+      const notes = invoice.review_notes || [];
+
+      document.getElementById("invoice-inspector-type").textContent = invoice.document_type || "发票详情";
+      document.getElementById("invoice-inspector-title").textContent = invoice.invoice_number || "未编号发票";
+      document.getElementById("invoice-inspector-edit").href = `/static/edit.html?id=${encodeURIComponent(invoice.id)}`;
+
+      const confirmButton = document.getElementById("invoice-inspector-confirm");
+      confirmButton.disabled = invoice.review_status === "已确认";
+      confirmButton.textContent = invoice.review_status === "已确认" ? "已确认" : "确认无误";
+
+      document.getElementById("invoice-inspector-content").innerHTML = `
+        <section class="inspector-section">
+          <h3>基本信息</h3>
+          <dl class="inspector-definition-grid">
+            <div><dt>往来单位</dt><dd>${escapeHtml(invoiceParty(invoice) || "-")}</dd></div>
+            <div><dt>开票日期</dt><dd>${escapeHtml(invoice.invoice_date || "-")}</dd></div>
+            <div><dt>购方</dt><dd>${escapeHtml(invoice.buyer_name || "-")}</dd></div>
+            <div><dt>销方</dt><dd>${escapeHtml(invoice.seller_name || "-")}</dd></div>
+            <div><dt>到期日</dt><dd>${escapeHtml(invoice.due_date || "待填写")}</dd></div>
+            <div><dt>负责人</dt><dd>${escapeHtml(invoice.owner || "待分配")}</dd></div>
+          </dl>
+        </section>
+        <section class="inspector-section">
+          <h3>金额与收付款</h3>
+          <div class="inspector-finance-grid">
+            <div class="inspector-stat"><span>不含税金额</span><strong>${formatMoney(invoice.amount_excl_tax)}</strong></div>
+            <div class="inspector-stat"><span>税额</span><strong>${formatMoney(invoice.tax_amount)}</strong></div>
+            <div class="inspector-stat"><span>价税合计</span><strong>${formatMoney(invoice.amount_incl_tax)}</strong></div>
+            <div class="inspector-stat"><span>预付款</span><strong>${formatMoney(invoice.prepayment_amount)}</strong></div>
+            <div class="inspector-stat is-paid"><span>${paymentLabel}</span><strong>${formatMoney(invoice.paid_amount)}</strong></div>
+            <div class="inspector-stat is-balance"><span>${balanceLabel}</span><strong>${formatMoney(outstanding)}</strong></div>
+          </div>
+          <div class="inspector-status-line">
+            <span>收付款状态</span>
+            <span class="tag ${getStatusClass(invoice.payment_status)}">${escapeHtml(invoice.payment_status)}</span>
+          </div>
+        </section>
+        <section class="inspector-section">
+          <h3>关联订单</h3>
+          ${orderNumbers.length
+            ? `<ul class="inspector-link-list">${orderNumbers.map((number) => `<li><strong>${escapeHtml(number)}</strong></li>`).join("")}</ul>`
+            : '<div class="inspector-empty-copy">暂未关联订单。</div>'}
+        </section>
+        <section class="inspector-section">
+          <h3>商品明细</h3>
+          ${invoice.items_text
+            ? `<pre class="inspector-raw-text">${escapeHtml(invoice.items_text)}</pre>`
+            : '<div class="inspector-empty-copy">暂无商品明细。</div>'}
+        </section>
+        <section class="inspector-section">
+          <h3>复核信息</h3>
+          <div class="inspector-status-line">
+            <span>复核状态</span>
+            <span class="tag ${getStatusClass(invoice.review_status)}">${escapeHtml(invoice.review_status)}</span>
+          </div>
+          ${notes.length
+            ? `<ul class="inspector-note-list">${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
+            : '<div class="inspector-empty-copy">暂无复核备注。</div>'}
+        </section>
+        <section class="inspector-section">
+          <h3>来源与记录</h3>
+          <dl class="inspector-definition-grid">
+            <div><dt>来源文件</dt><dd>${escapeHtml(invoice.source_filename || "-")}</dd></div>
+            <div><dt>上传时间</dt><dd>${escapeHtml(formatDateTime(invoice.created_at))}</dd></div>
+            <div><dt>最近更新</dt><dd>${escapeHtml(formatDateTime(invoice.updated_at))}</dd></div>
+          </dl>
+        </section>
+      `;
+    }
+
+    function setInvoiceInspectorFeedback(message, type = "") {
+      const feedback = document.getElementById("invoice-inspector-feedback");
+      feedback.textContent = message;
+      feedback.dataset.type = type;
+    }
+
+    function openInvoiceInspector(invoiceId, focusClose = true) {
+      const invoice = state.invoices.find((item) => Number(item.id) === Number(invoiceId));
+      if (!invoice) return;
+
+      state.selectedInvoiceId = Number(invoice.id);
+      renderInvoiceInspector(invoice);
+      renderTable();
+      setInvoiceInspectorFeedback("");
+
+      const inspector = document.getElementById("invoice-inspector");
+      inspector.hidden = false;
+      document.body.classList.add("inspector-open");
+      if (focusClose) document.getElementById("invoice-inspector-close").focus();
+    }
+
+    function closeInvoiceInspector() {
+      const selectedId = state.selectedInvoiceId;
+      state.selectedInvoiceId = null;
+      document.getElementById("invoice-inspector").hidden = true;
+      document.body.classList.remove("inspector-open");
+      renderTable();
+
+      if (selectedId !== null) {
+        document.querySelector(`[data-invoice-id="${selectedId}"]`)?.focus();
+      }
+    }
+
+    async function confirmInvoice() {
+      if (state.selectedInvoiceId === null) return;
+
+      const button = document.getElementById("invoice-inspector-confirm");
+      button.disabled = true;
+      setInvoiceInspectorFeedback("正在确认…");
+
+      try {
+        const response = await fetch(`/api/invoices/${state.selectedInvoiceId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ review_status: "已确认" })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(typeof result.detail === "string" ? result.detail : "确认失败。");
+        }
+
+        await loadInvoices();
+        openInvoiceInspector(state.selectedInvoiceId, false);
+        setInvoiceInspectorFeedback("已标记为确认无误。", "success");
+      } catch (error) {
+        button.disabled = false;
+        setInvoiceInspectorFeedback(error.message, "error");
+      }
     }
 
     function renderLedger() {
@@ -257,6 +434,23 @@
     document.getElementById("type-filter").addEventListener("change", applyFilters);
     document.getElementById("status-filter").addEventListener("change", applyFilters);
     document.getElementById("keyword-filter").addEventListener("input", applyFilters);
+    document.getElementById("invoice-table-body").addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      const row = event.target.closest("[data-invoice-id]");
+      if (row) openInvoiceInspector(row.dataset.invoiceId);
+    });
+    document.getElementById("invoice-table-body").addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key) || event.target.closest("a, button")) return;
+      const row = event.target.closest("[data-invoice-id]");
+      if (!row) return;
+      event.preventDefault();
+      openInvoiceInspector(row.dataset.invoiceId);
+    });
+    document.getElementById("invoice-inspector-close").addEventListener("click", closeInvoiceInspector);
+    document.getElementById("invoice-inspector-confirm").addEventListener("click", confirmInvoice);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.selectedInvoiceId !== null) closeInvoiceInspector();
+    });
     loadInvoices();
   </script>
 </body>

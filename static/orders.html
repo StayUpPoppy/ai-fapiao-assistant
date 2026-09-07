@@ -455,6 +455,22 @@
 
       <div id="empty-message" class="empty" hidden>暂无符合条件的订单。</div>
     </section>
+
+    <aside id="order-inspector" class="record-inspector" aria-labelledby="order-inspector-title" hidden>
+      <header class="inspector-header">
+        <div class="inspector-heading">
+          <div id="order-inspector-type" class="inspector-kicker">订单详情</div>
+          <h2 id="order-inspector-title">订单详情</h2>
+        </div>
+        <button id="order-inspector-close" class="inspector-close" type="button">关闭</button>
+      </header>
+      <div id="order-inspector-content" class="inspector-content"></div>
+      <footer class="inspector-footer">
+        <a id="order-inspector-edit" class="button-link inspector-edit" href="#">编辑信息</a>
+        <button id="order-inspector-confirm" type="button">确认无误</button>
+        <p id="order-inspector-feedback" class="inspector-feedback" role="status" aria-live="polite"></p>
+      </footer>
+    </aside>
   </main>
 
   <dialog id="order-dialog">
@@ -468,16 +484,16 @@
         <section class="ai-panel">
           <h3 class="ai-panel-title">AI 智能识别</h3>
           <p class="ai-panel-hint">
-            先选择下方订单类型，再上传订单或合同图片。AI 只负责回填，保存前请人工核对。
+            先选择下方订单类型，再上传订单或合同文件。AI 只负责回填，保存前请人工核对。
           </p>
 
           <div class="ai-upload-row">
             <label class="field">
-              订单或合同图片
+              订单或合同文件
               <input
                 id="order-file"
                 type="file"
-                accept="image/png,image/jpeg,image/webp"
+                accept=".pdf,image/png,image/jpeg,image/webp"
               >
             </label>
 
@@ -485,7 +501,7 @@
           </div>
 
           <div id="recognize-message" class="ai-result" aria-live="polite">
-            当前支持 PNG、JPG、WEBP 图片；扫描 PDF 请先转换为图片。
+            支持 PNG、JPG、WEBP 和 PDF；扫描 PDF 会自动转换为页面图片识别。
           </div>
         </section>
 
@@ -588,6 +604,7 @@
     const state = {
       orders: [],
       filteredOrders: [],
+      selectedOrderId: null,
       draftSourceFilename: null,
       draftRawDifyOutput: {}
     };
@@ -656,6 +673,13 @@
       });
 
       renderDashboard();
+
+      if (
+        state.selectedOrderId !== null &&
+        !state.filteredOrders.some((order) => Number(order.id) === state.selectedOrderId)
+      ) {
+        closeOrderInspector();
+      }
     }
 
     function renderKpis() {
@@ -694,7 +718,12 @@
           .join("<br>");
 
         return `
-          <tr>
+          <tr
+            class="record-row ${Number(order.id) === state.selectedOrderId ? "is-selected" : ""}"
+            data-order-id="${Number(order.id)}"
+            tabindex="0"
+            aria-label="查看订单 ${escapeHtml(order.order_number)} 的详细信息"
+          >
             <td>
               <strong>${escapeHtml(order.order_number)}</strong>
               <div class="muted">合同：${escapeHtml(order.contract_number || "-")}</div>
@@ -732,6 +761,143 @@
           </tr>
         `;
       }).join("");
+    }
+
+    function formatDateTime(value) {
+      return value ? String(value).replace("T", " ").slice(0, 16) : "-";
+    }
+
+    function renderOrderInspector(order) {
+      const outstanding = outstandingAmount(order);
+      const paymentLabel = order.order_type === "销售订单" ? "累计收款" : "累计付款";
+      const balanceLabel = order.order_type === "销售订单" ? "待收款" : "待付款";
+      const invoiceNumbers = order.invoice_numbers || [];
+      const notes = order.review_notes || [];
+
+      document.getElementById("order-inspector-type").textContent = order.order_type || "订单详情";
+      document.getElementById("order-inspector-title").textContent = order.order_number || "未编号订单";
+      document.getElementById("order-inspector-edit").href = `/static/order-edit.html?id=${encodeURIComponent(order.id)}`;
+
+      const confirmButton = document.getElementById("order-inspector-confirm");
+      confirmButton.disabled = order.review_status === "已确认";
+      confirmButton.textContent = order.review_status === "已确认" ? "已确认" : "确认无误";
+
+      document.getElementById("order-inspector-content").innerHTML = `
+        <section class="inspector-section">
+          <h3>基本信息</h3>
+          <dl class="inspector-definition-grid">
+            <div><dt>往来单位</dt><dd>${escapeHtml(order.counterparty_name || "-")}</dd></div>
+            <div><dt>合同号</dt><dd>${escapeHtml(order.contract_number || "-")}</dd></div>
+            <div><dt>订单日期</dt><dd>${escapeHtml(order.order_date || "-")}</dd></div>
+            <div><dt>交付日期</dt><dd>${escapeHtml(order.delivery_date || "-")}</dd></div>
+            <div><dt>到期日</dt><dd>${escapeHtml(order.due_date || "待填写")}</dd></div>
+            <div><dt>负责人</dt><dd>${escapeHtml(order.owner || "待分配")}</dd></div>
+            <div><dt>结算方式</dt><dd>${escapeHtml(order.settlement_method || "-")}</dd></div>
+            <div><dt>付款账期</dt><dd>${escapeHtml(order.payment_terms || "-")}</dd></div>
+          </dl>
+        </section>
+        <section class="inspector-section">
+          <h3>金额与收付款</h3>
+          <div class="inspector-finance-grid">
+            <div class="inspector-stat"><span>订单金额</span><strong>${formatMoney(order.order_amount)}</strong></div>
+            <div class="inspector-stat"><span>预付款</span><strong>${formatMoney(order.prepayment_amount)}</strong></div>
+            <div class="inspector-stat is-paid"><span>${paymentLabel}</span><strong>${formatMoney(order.paid_amount)}</strong></div>
+            <div class="inspector-stat is-balance"><span>${balanceLabel}</span><strong>${formatMoney(outstanding)}</strong></div>
+          </div>
+          <div class="inspector-status-line">
+            <span>收付款状态</span>
+            <span class="tag ${getTagClass(order.payment_status)}">${escapeHtml(order.payment_status)}</span>
+          </div>
+        </section>
+        <section class="inspector-section">
+          <h3>开票关联</h3>
+          <div class="inspector-status-line">
+            <span>开票状态</span>
+            <span class="tag ${getTagClass(order.invoice_status)}">${escapeHtml(order.invoice_status)}</span>
+          </div>
+          ${invoiceNumbers.length
+            ? `<ul class="inspector-link-list">${invoiceNumbers.map((number) => `<li><strong>${escapeHtml(number)}</strong></li>`).join("")}</ul>`
+            : '<div class="inspector-empty-copy">暂未关联发票。</div>'}
+        </section>
+        <section class="inspector-section">
+          <h3>复核信息</h3>
+          <div class="inspector-status-line">
+            <span>复核状态</span>
+            <span class="tag ${getTagClass(order.review_status)}">${escapeHtml(order.review_status)}</span>
+          </div>
+          ${notes.length
+            ? `<ul class="inspector-note-list">${notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul>`
+            : '<div class="inspector-empty-copy">暂无复核备注。</div>'}
+        </section>
+        <section class="inspector-section">
+          <h3>来源与记录</h3>
+          <dl class="inspector-definition-grid">
+            <div><dt>来源文件</dt><dd>${escapeHtml(order.source_filename || "-")}</dd></div>
+            <div><dt>上传时间</dt><dd>${escapeHtml(formatDateTime(order.created_at))}</dd></div>
+            <div><dt>最近更新</dt><dd>${escapeHtml(formatDateTime(order.updated_at))}</dd></div>
+          </dl>
+        </section>
+      `;
+    }
+
+    function setOrderInspectorFeedback(message, type = "") {
+      const feedback = document.getElementById("order-inspector-feedback");
+      feedback.textContent = message;
+      feedback.dataset.type = type;
+    }
+
+    function openOrderInspector(orderId, focusClose = true) {
+      const order = state.orders.find((item) => Number(item.id) === Number(orderId));
+      if (!order) return;
+
+      state.selectedOrderId = Number(order.id);
+      renderOrderInspector(order);
+      renderTable();
+      setOrderInspectorFeedback("");
+
+      const inspector = document.getElementById("order-inspector");
+      inspector.hidden = false;
+      document.body.classList.add("inspector-open");
+      if (focusClose) document.getElementById("order-inspector-close").focus();
+    }
+
+    function closeOrderInspector() {
+      const selectedId = state.selectedOrderId;
+      state.selectedOrderId = null;
+      document.getElementById("order-inspector").hidden = true;
+      document.body.classList.remove("inspector-open");
+      renderTable();
+
+      if (selectedId !== null) {
+        document.querySelector(`[data-order-id="${selectedId}"]`)?.focus();
+      }
+    }
+
+    async function confirmOrder() {
+      if (state.selectedOrderId === null) return;
+
+      const button = document.getElementById("order-inspector-confirm");
+      button.disabled = true;
+      setOrderInspectorFeedback("正在确认…");
+
+      try {
+        const response = await fetch(`/api/orders/${state.selectedOrderId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ review_status: "已确认" })
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          throw new Error(typeof result.detail === "string" ? result.detail : "确认失败。");
+        }
+
+        await loadOrders();
+        openOrderInspector(state.selectedOrderId, false);
+        setOrderInspectorFeedback("已标记为确认无误。", "success");
+      } catch (error) {
+        button.disabled = false;
+        setOrderInspectorFeedback(error.message, "error");
+      }
     }
 
     function renderDashboard() {
@@ -804,7 +970,7 @@
       state.draftRawDifyOutput = {};
       setFormMessage("");
       setRecognizeMessage(
-        "当前支持 PNG、JPG、WEBP 图片；扫描 PDF 请先转换为图片。"
+        "支持 PNG、JPG、WEBP 和 PDF；扫描 PDF 会自动转换为页面图片识别。"
       );
     }
 
@@ -859,12 +1025,22 @@
       const file = fileInput.files[0];
 
       if (!file) {
-        setRecognizeMessage("请先选择订单或合同图片。", "error");
+        setRecognizeMessage("请先选择订单或合同文件。", "error");
         return;
       }
 
-      if (!file.type.startsWith("image/")) {
-        setRecognizeMessage("当前只支持 PNG、JPG、WEBP 图片。", "error");
+      const normalizedFilename = file.name.toLowerCase();
+      const supportedImageTypes = new Set([
+        "image/png",
+        "image/jpeg",
+        "image/webp"
+      ]);
+      const hasSupportedImageExtension = /\.(png|jpe?g|webp)$/.test(normalizedFilename);
+      const isSupportedImage = supportedImageTypes.has(file.type) || hasSupportedImageExtension;
+      const isPdf = file.type === "application/pdf" || normalizedFilename.endsWith(".pdf");
+
+      if (!isSupportedImage && !isPdf) {
+        setRecognizeMessage("文件格式不支持，请选择 PNG、JPG、WEBP 或 PDF 文件。", "error");
         return;
       }
 
@@ -875,7 +1051,11 @@
       recognizeButton.disabled = true;
       state.draftSourceFilename = null;
       state.draftRawDifyOutput = {};
-      setRecognizeMessage("正在上传并识别，请稍候……");
+      setRecognizeMessage(
+        isPdf
+          ? "正在上传 PDF、转换页面并识别，请稍候……"
+          : "正在上传并识别图片，请稍候……"
+      );
 
       try {
         const response = await fetch("/api/dify/orders/extract", {
@@ -1008,6 +1188,23 @@
     document.getElementById("type-filter").addEventListener("change", applyFilters);
     document.getElementById("invoice-filter").addEventListener("change", applyFilters);
     document.getElementById("keyword-filter").addEventListener("input", applyFilters);
+    document.getElementById("order-table-body").addEventListener("click", (event) => {
+      if (event.target.closest("a, button")) return;
+      const row = event.target.closest("[data-order-id]");
+      if (row) openOrderInspector(row.dataset.orderId);
+    });
+    document.getElementById("order-table-body").addEventListener("keydown", (event) => {
+      if (!["Enter", " "].includes(event.key) || event.target.closest("a, button")) return;
+      const row = event.target.closest("[data-order-id]");
+      if (!row) return;
+      event.preventDefault();
+      openOrderInspector(row.dataset.orderId);
+    });
+    document.getElementById("order-inspector-close").addEventListener("click", closeOrderInspector);
+    document.getElementById("order-inspector-confirm").addEventListener("click", confirmOrder);
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && state.selectedOrderId !== null) closeOrderInspector();
+    });
 
     loadOrders();
   </script>

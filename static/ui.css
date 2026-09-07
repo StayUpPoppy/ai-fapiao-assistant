@@ -17,6 +17,7 @@
   --ui-danger-soft: #fff0f0;
   --ui-shadow: 0 10px 30px rgba(22, 34, 56, 0.05);
   --ui-radius: 12px;
+  --record-inspector-width: clamp(420px, 34vw, 560px);
   --ui-font: "Microsoft YaHei", "PingFang SC", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
@@ -604,6 +605,245 @@ body.app-page .action-link {
 
 body.app-page .empty { padding: 48px; color: var(--ui-text-muted); }
 
+/* 台账记录详情检查器 */
+body.app-page .page {
+  transition: width 180ms ease-out;
+}
+
+body.app-page.inspector-open .page {
+  width: calc(100% - var(--record-inspector-width));
+}
+
+body.app-page .record-row {
+  cursor: pointer;
+}
+
+body.app-page .record-row:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: -3px;
+}
+
+body.app-page .record-row.is-selected td {
+  background: var(--ui-primary-soft);
+  box-shadow: inset 0 1px #cbdcff, inset 0 -1px #cbdcff;
+}
+
+body.app-page .record-row.is-selected td:first-child {
+  box-shadow: inset 3px 0 var(--ui-primary), inset 0 1px #cbdcff, inset 0 -1px #cbdcff;
+}
+
+body.app-page .record-inspector {
+  position: fixed;
+  z-index: 40;
+  top: 64px;
+  right: 0;
+  bottom: 0;
+  display: grid;
+  width: min(100vw, var(--record-inspector-width));
+  min-width: 0;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  color: var(--ui-text);
+  border-left: 1px solid var(--ui-border-strong);
+  background: var(--ui-surface);
+}
+
+body.app-page .record-inspector[hidden] {
+  display: none;
+}
+
+body.app-page .inspector-header {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+body.app-page .inspector-heading {
+  min-width: 0;
+}
+
+body.app-page .inspector-kicker {
+  color: var(--ui-text-muted);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+body.app-page .inspector-header h2 {
+  margin: 2px 0 0;
+  overflow: hidden;
+  color: var(--ui-text);
+  font-size: 16px;
+  font-weight: 730;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+body.app-page .inspector-close {
+  min-height: 32px;
+  padding: 6px 9px;
+  color: var(--ui-text-muted);
+  border-color: var(--ui-border-strong);
+  background: #fff;
+  font-size: 12px;
+}
+
+body.app-page .inspector-close:hover {
+  color: var(--ui-text);
+  border-color: #c8d2e0;
+  background: #f7f9fc;
+}
+
+body.app-page .inspector-content {
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 20px 24px;
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
+body.app-page .inspector-section {
+  padding: 17px 0;
+  border-bottom: 1px solid var(--ui-border);
+}
+
+body.app-page .inspector-section:last-child {
+  border-bottom: 0;
+}
+
+body.app-page .inspector-section h3 {
+  margin: 0 0 12px;
+  color: var(--ui-text);
+  font-size: 13px;
+  font-weight: 720;
+}
+
+body.app-page .inspector-definition-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin: 0;
+}
+
+body.app-page .inspector-definition-grid > div {
+  min-width: 0;
+}
+
+body.app-page .inspector-definition-grid dt,
+body.app-page .inspector-stat span {
+  margin: 0 0 3px;
+  color: var(--ui-text-muted);
+  font-size: 10px;
+}
+
+body.app-page .inspector-definition-grid dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--ui-text);
+  font-size: 12px;
+}
+
+body.app-page .inspector-finance-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 18px;
+}
+
+body.app-page .inspector-stat {
+  display: grid;
+}
+
+body.app-page .inspector-stat strong {
+  color: var(--ui-text);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+body.app-page .inspector-stat.is-paid strong { color: var(--ui-success); }
+body.app-page .inspector-stat.is-balance strong { color: var(--ui-danger); }
+
+body.app-page .inspector-status-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--ui-text-muted);
+  font-size: 11px;
+}
+
+body.app-page .inspector-link-list,
+body.app-page .inspector-note-list {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+body.app-page .inspector-link-list li,
+body.app-page .inspector-note-list li {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+body.app-page .inspector-link-list strong {
+  color: var(--ui-primary);
+  font-weight: 650;
+}
+
+body.app-page .inspector-empty-copy {
+  color: var(--ui-text-muted);
+  font-size: 12px;
+}
+
+body.app-page .inspector-raw-text {
+  max-height: 190px;
+  margin: 0;
+  overflow: auto;
+  color: #4f5e74;
+  font-family: var(--ui-font);
+  font-size: 11px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+
+body.app-page .inspector-footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 8px;
+  padding: 14px 20px;
+  border-top: 1px solid var(--ui-border);
+  background: #fff;
+}
+
+body.app-page .inspector-edit {
+  color: var(--ui-primary);
+  border-color: #cbdcff;
+  background: #fff;
+}
+
+body.app-page .inspector-edit:hover {
+  color: var(--ui-primary-hover);
+  border-color: #a8c4ff;
+  background: var(--ui-primary-soft);
+}
+
+body.app-page .inspector-feedback {
+  grid-column: 1 / -1;
+  min-height: 16px;
+  margin: 0;
+  color: var(--ui-text-muted);
+  font-size: 10px;
+  text-align: center;
+}
+
+body.app-page .inspector-feedback[data-type="success"] { color: #087c69; }
+body.app-page .inspector-feedback[data-type="error"] { color: #c93e3e; }
+
 /* 工作台：全局概览与待处理入口 */
 body.app-page .work-snapshot {
   display: grid;
@@ -811,9 +1051,16 @@ body.login-page {
 
 @media (max-width: 900px) {
   body.app-page { min-width: 0; }
+  body.app-page.inspector-open { overflow: hidden; }
   .app-shell { grid-template-columns: 1fr; }
   .app-sidebar { position: static; display: none; }
   body.app-page .page { padding: 22px 18px 36px; }
+  body.app-page.inspector-open .page { width: 100%; }
+  body.app-page .record-inspector {
+    inset: 0;
+    width: 100%;
+    max-width: none;
+  }
   .app-topbar { padding: 0 18px; }
   body.app-page .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   body.app-page .kpi-card:nth-child(2) { border-right: 0; }
