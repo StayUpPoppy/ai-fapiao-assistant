@@ -135,7 +135,7 @@
       .grid { grid-template-columns: 1fr; }
     }
   </style>
-  <link rel="stylesheet" href="/static/ui.css">
+  <link rel="stylesheet" href="/static/ui.css?v=20260910d">
 </head>
 
 <body data-page="entry">
@@ -151,11 +151,11 @@
       <div class="entry-progress-step"><span class="entry-progress-index">3</span>保存台账</div>
     </div>
 
-    <div class="entry-workspace">
+    <div id="invoice-entry-workspace" class="entry-workspace">
 
-    <section class="card">
+    <section class="card entry-source-card">
       <h2>1. 上传并识别</h2>
-      <p class="hint">支持 PDF、JPG、PNG 等发票文件。</p>
+      <p class="hint">支持 PDF、JPG、PNG 等发票文件；选择后可直接对照原件。</p>
 
       <div class="grid">
         <label>
@@ -177,6 +177,38 @@
       </div>
 
       <div id="recognize-message" class="message"></div>
+
+      <div class="source-preview" aria-label="发票源文件预览">
+        <div id="invoice-preview-empty" class="source-preview-empty">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M6 3h9l3 3v15H6z"></path>
+            <path d="M15 3v4h4M9 12h6M9 16h4"></path>
+          </svg>
+          <strong>选择文件后在这里预览</strong>
+          <span>按住拖动浏览，使用工具栏或 Ctrl＋滚轮缩放</span>
+        </div>
+
+        <div id="invoice-preview-content" class="source-preview-content" hidden>
+          <div class="source-preview-toolbar">
+            <div class="source-preview-file">
+              <strong id="invoice-preview-filename"></strong>
+              <span id="invoice-preview-meta"></span>
+            </div>
+            <button id="invoice-preview-open" class="source-preview-open" type="button" disabled>新窗口打开</button>
+          </div>
+          <div class="source-preview-stage">
+            <div id="invoice-preview-image-host" class="source-preview-image-host" hidden></div>
+            <div
+              id="invoice-preview-pdf"
+              class="source-preview-pdf-host"
+              hidden
+              role="region"
+              aria-label="发票 PDF 源文件预览"
+              tabindex="0"
+            ></div>
+          </div>
+        </div>
+      </div>
     </section>
 
     <section id="review-section" class="card hidden">
@@ -273,11 +305,22 @@
     </div>
   </main>
 
-  <script src="/static/ui.js"></script>
+  <script src="/static/ui.js?v=20260910d"></script>
   <script>
     const state = {
       difyOutput: {}
     };
+
+    const invoiceSourcePreview = window.LedgerUI.createLocalFilePreview({
+      inputId: "invoice-file",
+      emptyId: "invoice-preview-empty",
+      contentId: "invoice-preview-content",
+      imageHostId: "invoice-preview-image-host",
+      pdfId: "invoice-preview-pdf",
+      filenameId: "invoice-preview-filename",
+      metaId: "invoice-preview-meta",
+      openButtonId: "invoice-preview-open"
+    });
 
     function setMessage(elementId, message, type = "") {
       const element = document.getElementById(elementId);
@@ -376,6 +419,7 @@
         );
 
         document.getElementById("review-section").classList.remove("hidden");
+        document.getElementById("invoice-entry-workspace").classList.add("has-review");
         updateEntryProgress(1);
 
         const checkMessage = outputs.amount_check_passed
